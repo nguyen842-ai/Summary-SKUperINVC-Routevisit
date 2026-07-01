@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bản Đồ Sao - Trạm Lắng Nghe Vũ Trụ</title>
+    <style>
+        :root {
+            --bg-main: #1a0b2e;
+            --bg-panel: #2a164d;
+            --text-main: #e5d3b3;
+            --accent-gold: #c29d59;
+            --border-color: rgba(74, 43, 125, 0.5);
+        }
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: 'Segoe UI', sans-serif;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 20px;
+        }
+        h1 { color: var(--accent-gold); text-shadow: 0 0 10px var(--accent-gold); }
+        .form-container {
+            background: var(--bg-panel);
+            padding: 20px; border-radius: 12px;
+            border: 1px solid var(--accent-gold);
+            width: 100%; max-width: 400px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .input-group { display: flex; justify-content: space-between; margin-bottom: 15px; gap: 10px; }
+        input {
+            width: 100%; padding: 10px; border-radius: 6px;
+            background: rgba(0,0,0,0.3); border: 1px solid var(--border-color);
+            color: white; outline: none;
+        }
+        input::placeholder { color: #a78bfa; }
+        button {
+            width: 100%; padding: 12px; font-weight: bold; font-size: 1rem;
+            background-color: var(--accent-gold); color: var(--bg-main);
+            border: none; border-radius: 6px; cursor: pointer; transition: 0.2s;
+        }
+        button:hover { background-color: #e5d3b3; box-shadow: 0 0 10px var(--accent-gold); }
+        
+        #result-box {
+            margin-top: 20px; width: 100%; max-width: 600px;
+            background: rgba(42, 22, 77, 0.7); border: 1px dashed var(--accent-gold);
+            padding: 20px; border-radius: 12px; text-align: center;
+            display: none;
+        }
+        #chart-image { width: 100%; max-width: 500px; border-radius: 50%; }
+        .loading { font-style: italic; color: #c4b5fd; display: none; margin-top: 10px;}
+    </style>
+</head>
+<body>
+
+    <h1>✨ Bản Đồ Sao Cá Nhân ✨</h1>
+    
+    <div class="form-container">
+        <div class="input-group">
+            <input type="number" id="day" placeholder="Ngày (VD: 15)" min="1" max="31">
+            <input type="number" id="month" placeholder="Tháng (VD: 8)" min="1" max="12">
+            <input type="number" id="year" placeholder="Năm (VD: 1998)">
+        </div>
+        
+        <div class="input-group">
+            <input type="number" id="hour" placeholder="Giờ (0-23)" min="0" max="23">
+            <input type="number" id="min" placeholder="Phút (0-59)" min="0" max="59">
+        </div>
+
+        <div class="input-group">
+            <input type="number" id="lat" placeholder="Vĩ độ (VD: 10.76)" step="0.01">
+            <input type="number" id="lon" placeholder="Kinh độ (VD: 106.66)" step="0.01">
+            <input type="number" id="tzone" placeholder="Múi giờ (VD: 7)" step="0.5">
+        </div>
+
+        <button id="btn-draw-chart">🔮 Vẽ Bản Đồ Sao 🔮</button>
+        <div id="loading-msg" class="loading">Đang kết nối với các vì sao...</div>
+    </div>
+
+    <div id="result-box">
+        <h3 style="color: var(--accent-gold); margin-top:0;">Định Mệnh Của Bạn</h3>
+        <div id="svg-container"></div>
+        <p id="astro-data" style="font-size: 0.9rem; text-align: left; line-height: 1.6;"></p>
+    </div>
+
+    <script>
+        document.getElementById('btn-draw-chart').addEventListener('click', async () => {
+            const day = document.getElementById('day').value;
+            const month = document.getElementById('month').value;
+            const year = document.getElementById('year').value;
+            const hour = document.getElementById('hour').value;
+            const min = document.getElementById('min').value;
+            const lat = document.getElementById('lat').value;
+            const lon = document.getElementById('lon').value;
+            const tzone = document.getElementById('tzone').value;
+
+            if (!day || !month || !year || !hour || !min || !lat || !lon || !tzone) {
+                alert("Vui lòng điền đầy đủ các thông số vũ trụ!");
+                return;
+            }
+
+            document.getElementById('loading-msg').style.display = 'block';
+            document.getElementById('result-box').style.display = 'none';
+
+            try {
+                // Đang gọi về backend trên Vercel của bạn (chúng ta sẽ tạo ở Bước 2)
+                const response = await fetch('/api/astro', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ day, month, year, hour, min, lat, lon, tzone })
+                });
+
+                const data = await response.json();
+                
+                document.getElementById('loading-msg').style.display = 'none';
+                document.getElementById('result-box').style.display = 'block';
+
+                // Nếu API trả về ảnh định dạng SVG
+                if (data.svg) {
+                    document.getElementById('svg-container').innerHTML = data.svg;
+                } else {
+                    document.getElementById('astro-data').innerText = "Không thể vẽ được ảnh từ dữ liệu này.";
+                }
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('loading-msg').innerText = "Vũ trụ đang bận! Hãy thử lại sau.";
+            }
+        });
+    </script>
+</body>
+</html>
