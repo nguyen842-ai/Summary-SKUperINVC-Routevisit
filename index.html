@@ -1,114 +1,3 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Tracking SKU/Invoice Dashboard</title>
-    
-    <!-- Supabase -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
-    <!-- SheetJS (Thư viện xuất Excel) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    
-    <style>
-        body { 
-            margin: 0; font-family: 'Segoe UI', Arial, sans-serif; 
-            background-color: #f0f4f8; padding: 20px; font-size: 13px;
-        }
-
-        #loader-wrapper { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.95); z-index: 99999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s ease; text-align: center; padding: 20px;}
-        .spinner { width: 40px; height: 40px; border: 4px solid #B5D4F4; border-top: 4px solid #0C447C; border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .loader-text { margin-top: 15px; font-size: 14px; font-weight: bold; color: #0C447C; letter-spacing: 1px;}
-
-        h2 { margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #000; }
-
-        /* THANH ĐIỀU KHIỂN BỘ LỌC & EXCEL */
-        .controls-bar {
-            display: flex; gap: 15px; margin-bottom: 15px; align-items: center; flex-wrap: wrap;
-            background: white; padding: 12px 15px; border: 1px solid #000; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .filter-group { display: flex; align-items: center; gap: 8px; font-weight: bold; }
-        .filter-group select { padding: 5px; border: 1px solid #999; outline: none; border-radius: 4px; font-family: inherit; font-size: 12px; min-width: 150px; }
-        
-        .btn-excel {
-            background-color: #217346; /* Màu xanh lá chuẩn của Excel */
-            color: white; border: 1px solid #1e633d; padding: 6px 15px; font-weight: bold; 
-            border-radius: 4px; cursor: pointer; transition: 0.2s; margin-left: auto;
-        }
-        .btn-excel:hover { background-color: #1a5c37; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-
-        /* EXCEL-LIKE TABLE STYLES */
-        .table-wrap { width: 100%; overflow-x: auto; background: white; border: 1px solid #000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .sku-table { width: 100%; border-collapse: collapse; min-width: 1200px; }
-        .sku-table th, .sku-table td { border: 1px solid #000; padding: 6px 8px; text-align: center; vertical-align: middle; }
-        .sku-table thead th { background-color: #92d050; color: black; font-weight: bold; }
-        
-        .text-left { text-align: left !important; }
-        .sub-total-row td { background-color: #c6e0b4; font-weight: bold; }
-    </style>
-</head>
-<body>
-
-<div id="loader-wrapper">
-    <div class="spinner" id="loader-spinner"></div>
-    <div class="loader-text" id="loader-text">ĐANG TẢI DỮ LIỆU TỪ SUPABASE...</div>
-</div>
-
-<h2>TRACKING SKU/ INVOICE IN JULY 2026</h2>
-
-<!-- THANH ĐIỀU KHIỂN (BỘ LỌC & EXCEL) -->
-<div class="controls-bar">
-    <div class="filter-group">
-        <label>Vùng (HQ):</label>
-        <select id="filterHQ" onchange="renderTable()"><option value="ALL">Tất cả</option></select>
-    </div>
-    <div class="filter-group">
-        <label>PIC:</label>
-        <select id="filterPIC" onchange="renderTable()"><option value="ALL">Tất cả</option></select>
-    </div>
-    <div class="filter-group">
-        <label>Khu vực (Area):</label>
-        <select id="filterArea" onchange="renderTable()"><option value="ALL">Tất cả</option></select>
-    </div>
-    <button class="btn-excel" onclick="exportExcel()">📥 TẢI XUỐNG EXCEL</button>
-</div>
-
-<!-- BẢNG DỮ LIỆU -->
-<div class="table-wrap">
-    <table class="sku-table" id="trackingTable">
-        <thead>
-            <tr>
-                <th rowspan="2" style="width: 5%;">HQ/<br><i>Vùng</i></th>
-                <th rowspan="2" style="width: 10%;">PIC/<br><i>Người phụ trách</i></th>
-                <th rowspan="2" style="width: 10%;">Area/<br><i>Khu vực</i></th>
-                <th colspan="3">No. of HC</th>
-                <th colspan="3">SKU/ invoice</th>
-                <th rowspan="2" style="width: 6%;">SKU/invc<br>khu vực</th>
-                <th rowspan="2" style="width: 6%;">SKU/invc<br>toàn quốc</th>
-                <th colspan="4">No. of HC in July'26</th>
-            </tr>
-            <tr>
-                <th style="width: 4%;">KAE</th>
-                <th style="width: 4%;">DSR</th>
-                <th style="width: 4%;">Total</th>
-                <th style="width: 5%;">May</th>
-                <th style="width: 5%;">June</th>
-                <th style="width: 5%;">July</th>
-                <th style="width: 12%;">Lower than area SKU/ invoice<br><i>Thấp hơn SKU/ invoice của khu vực</i></th>
-                <th style="width: 5%;">% of Staff</th>
-                <th style="width: 12%;">Lower than nationwide SKU/ invoice<br><i>Thấp hơn SKU/ invoice của toàn quốc</i></th>
-                <th style="width: 5%;">% of Staff</th>
-            </tr>
-        </thead>
-        <tbody id="skuTrackingBody">
-            <!-- Dữ liệu render từ JS -->
-        </tbody>
-    </table>
-</div>
-
-<script>
 // ==========================================
 // 1. KẾT NỐI VÀ TẢI DỮ LIỆU BẢO MẬT TỪ SUPABASE
 // ==========================================
@@ -172,7 +61,19 @@ let dbMaster = []; let dbSales = [];
 // ==========================================
 // 2. HÀM TIỆN ÍCH & TÍNH TOÁN
 // ==========================================
-function cleanName(name) { return String(name || "").replace(/[✔️❌]/g, '').trim().toUpperCase(); }
+
+// ĐÃ KHÔI PHỤC LOGIC KAM MAP CHUẨN TỪ BỘ CODE GỐC
+function cleanName(name, isKamField = false, areaName = "") {
+    let cleanStr = String(name || "").replace(/[✔️❌]/g, '').trim().toUpperCase();
+    if (isKamField) {
+        if (typeof kamMap !== 'undefined') {
+            let areaKey = String(areaName || "").toUpperCase().trim() + "|" + cleanStr;
+            if (kamMap[areaKey]) return kamMap[areaKey];
+            if (kamMap[cleanStr]) return kamMap[cleanStr];
+        }
+    }
+    return cleanStr;
+}
 
 function isMonth(val, targetMonth) {
     if (!val) return false;
@@ -208,12 +109,11 @@ function calculateAvgSku(salesSubset) {
 function initFilters() {
     let allData = [...dbMaster, ...dbSales];
     
-    // Lấy dữ liệu duy nhất
     let hqs = [...new Set(allData.map(d => d.hq))].filter(Boolean).sort();
-    let pics = [...new Set(allData.map(d => cleanName(d.kam)))].filter(Boolean).sort();
+    // Áp dụng cleanName có kamMap để lấy list PIC chuẩn
+    let pics = [...new Set(allData.map(d => cleanName(d.kam, true, d.area)))].filter(Boolean).sort();
     let areas = [...new Set(allData.map(d => d.area))].filter(Boolean).sort();
 
-    // Hàm nhét dữ liệu vào thẻ select
     const populate = (id, list) => {
         const select = document.getElementById(id);
         list.forEach(item => {
@@ -229,13 +129,12 @@ function initFilters() {
 }
 
 // ==========================================
-// 4. RENDER BẢNG (KẾT HỢP BỘ LỌC VÀ LOGIC MỚI)
+// 4. RENDER BẢNG (KẾT HỢP BỘ LỌC & KAM MAP)
 // ==========================================
 function renderTable() {
     const tbody = document.getElementById('skuTrackingBody');
     let allData = [...dbMaster, ...dbSales];
 
-    // Lấy giá trị đang chọn trên bộ lọc
     let selHQ = document.getElementById('filterHQ').value;
     let selPIC = document.getElementById('filterPIC').value;
     let selArea = document.getElementById('filterArea').value;
@@ -247,13 +146,11 @@ function renderTable() {
 
     let html = '';
     
-    // Lấy list HQ (đã lọc nếu có chọn)
     let hqs = [...new Set(allData.map(d => d.hq))].filter(Boolean).sort();
     if (selHQ !== "ALL") hqs = [selHQ];
 
     let natTotalKae = 0, natTotalDsr = 0, natTotalHC = 0;
     
-    // TÍNH SKU TOÀN QUỐC THÁNG 7 (Cố định để đối chiếu)
     let natSalesJuly = dbSales.filter(d => isMonth(d.month, 7));
     let natAvgSku = calculateAvgSku(natSalesJuly);
 
@@ -263,32 +160,34 @@ function renderTable() {
     hqs.forEach(hq => {
         let hqData = allData.filter(d => d.hq === hq);
         
-        // BƯỚC 2: LẶP THEO PIC (KAM) THAY VÌ AREA ĐỂ TÍNH AVG SKU CHUẨN CHO KAM
-        let kams = [...new Set(hqData.map(d => cleanName(d.kam)))].filter(Boolean).sort();
+        // BƯỚC 2: LẶP THEO PIC (KAM) ĐÃ ĐƯỢC MAP
+        let kams = [...new Set(hqData.map(d => cleanName(d.kam, true, d.area)))].filter(Boolean).sort();
         if (selPIC !== "ALL") kams = kams.filter(k => k === selPIC);
         
         let hqTotalKae = 0, hqTotalDsr = 0, hqTotalHC = 0;
         let hqHasData = false;
 
         kams.forEach(kam => {
-            let kamData = hqData.filter(d => cleanName(d.kam) === kam);
+            // Lấy dữ liệu thuộc KAM đã map
+            let kamData = hqData.filter(d => cleanName(d.kam, true, d.area) === kam);
             
-            // BƯỚC 3: LẶP THEO KHU VỰC (AREA) MÀ KAM ĐÓ PHỤ TRÁCH
+            // BƯỚC 3: LẶP THEO KHU VỰC CỦA KAM ĐÓ
             let areas = [...new Set(kamData.map(d => d.area))].filter(Boolean).sort();
             if (selArea !== "ALL") areas = areas.filter(a => a === selArea);
 
             areas.forEach(area => {
-                let aMaster = dbMaster.filter(d => d.hq === hq && cleanName(d.kam) === kam && d.area === area);
-                let aSales = dbSales.filter(d => d.hq === hq && cleanName(d.kam) === kam && d.area === area);
+                // Đảm bảo lấy đúng data của HQ + KAM (đã map) + AREA
+                let aMaster = dbMaster.filter(d => d.hq === hq && cleanName(d.kam, true, d.area) === kam && d.area === area);
+                let aSales = dbSales.filter(d => d.hq === hq && cleanName(d.kam, true, d.area) === kam && d.area === area);
                 
                 hqHasData = true; hasRenderedAny = true;
 
-                // LOGIC 1: DISTINCT COUNT KAE VÀ DSR CHỈ TRONG THÁNG 7
                 let aMasterJul = aMaster.filter(d => isMonth(d.month, 7));
                 let aSalesJul = aSales.filter(d => isMonth(d.month, 7));
                 
+                // Gom nhân sự KAE/DSR (Dùng cleanName với isKamField = false)
                 let rawStaffsJul = [...aMasterJul.map(d => d.kae), ...aSalesJul.map(d => d.kae)];
-                let staffsJul = [...new Set(rawStaffsJul.map(n => cleanName(n)))].filter(Boolean); // Lọc trùng
+                let staffsJul = [...new Set(rawStaffsJul.map(n => cleanName(n, false)))].filter(Boolean);
                 
                 let kaeCount = staffsJul.filter(s => s.includes('KAE')).length;
                 let dsrCount = staffsJul.filter(s => s.includes('DSR')).length;
@@ -296,7 +195,6 @@ function renderTable() {
 
                 hqTotalKae += kaeCount; hqTotalDsr += dsrCount; hqTotalHC += totalHC;
 
-                // LOGIC 2: TÍNH AVG SKU CHO KAM TẠI KHU VỰC NÀY TRONG TỪNG THÁNG
                 let sMay = aSales.filter(d => isMonth(d.month, 5));
                 let sJun = aSales.filter(d => isMonth(d.month, 6));
                 let sJul = aSalesJul;
@@ -304,14 +202,13 @@ function renderTable() {
                 let avgMay = calculateAvgSku(sMay);
                 let avgJun = calculateAvgSku(sJun);
                 let avgJul = calculateAvgSku(sJul);
-                let areaAvgSku = avgJul; // SKU của khu vực đó trong tháng 7 (để đối chiếu với Staff)
+                let areaAvgSku = avgJul;
 
-                // LOGIC 3: SO SÁNH NHÂN VIÊN TRONG THÁNG 7 (Lower than Area/Nationwide)
                 let lowerAreaCount = 0;
                 let lowerNatCount = 0;
                 
                 staffsJul.forEach(staff => {
-                    let staffJulSales = sJul.filter(d => cleanName(d.kae) === staff);
+                    let staffJulSales = sJul.filter(d => cleanName(d.kae, false) === staff);
                     let staffAvgSku = calculateAvgSku(staffJulSales);
                     
                     if (staffAvgSku > 0 && staffAvgSku < areaAvgSku) lowerAreaCount++;
@@ -343,7 +240,6 @@ function renderTable() {
             });
         });
 
-        // DÒNG TỔNG THEO VÙNG (HQ)
         if (hqHasData) {
             natTotalKae += hqTotalKae; natTotalDsr += hqTotalDsr; natTotalHC += hqTotalHC;
             
@@ -364,7 +260,6 @@ function renderTable() {
         return;
     }
 
-    // DÒNG TỔNG TOÀN QUỐC
     html += `
         <tr class="sub-total-row" style="background-color: #a9d08e;">
             <td colspan="3" class="text-left">Total Nationwide</td>
@@ -387,9 +282,7 @@ function renderTable() {
 // ==========================================
 function exportExcel() {
     var table = document.getElementById("trackingTable");
-    // Sử dụng SheetJS để xuất ra Book
     var wb = XLSX.utils.table_to_book(table, {sheet: "Tracking SKU", raw: true});
-    // Ghi file
     XLSX.writeFile(wb, "Tracking_SKU_Invoice.xlsx");
 }
 
@@ -413,7 +306,3 @@ function init() {
         setTimeout(() => loader.style.display = 'none', 500);
     }, 600);
 }
-</script>
-
-</body>
-</html>
