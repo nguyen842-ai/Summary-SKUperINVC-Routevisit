@@ -2,184 +2,321 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TRACKING SKU/ INVOICE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Tracking SKU/Invoice Dashboard</title>
+    
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            font-size: 13px;
+        body { 
+            margin: 0; font-family: 'Segoe UI', Arial, sans-serif; 
+            background-color: #f0f4f8; padding: 20px; font-size: 13px;
         }
 
-        h2 {
-            margin-bottom: 10px;
-            font-size: 18px;
-            text-transform: uppercase;
-        }
+        /* LOADING SCREEN */
+        #loader-wrapper { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.95); z-index: 99999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s ease; text-align: center; padding: 20px;}
+        .spinner { width: 40px; height: 40px; border: 4px solid #B5D4F4; border-top: 4px solid #0C447C; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loader-text { margin-top: 15px; font-size: 14px; font-weight: bold; color: #0C447C; letter-spacing: 1px;}
 
-        .table-container {
-            width: 100%;
-            overflow-x: auto;
-        }
+        h2 { margin-bottom: 15px; font-size: 18px; text-transform: uppercase; color: #000; }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 1200px;
-        }
-
-        th, td {
-            border: 1px solid #000;
-            padding: 5px;
-            text-align: center;
-            vertical-align: middle;
-        }
-
-        /* Định dạng màu nền Header theo chuẩn Excel */
-        thead th {
-            background-color: #92d050;
-            font-weight: bold;
-        }
-
-        /* Căn trái cho các cột phân loại */
-        .text-left {
-            text-align: left !important;
-        }
-
-        /* Định dạng hàng Tổng cộng (Total) */
-        .total-row td {
-            background-color: #c6e0b4;
-            font-weight: bold;
-        }
-
-        /* Thêm mũi tên giả lập filter của Excel cho giống hình */
-        .excel-filter {
-            display: inline-block;
-            float: right;
-            width: 12px;
-            height: 12px;
-            background-color: #ddd;
-            border: 1px solid #999;
-            font-size: 8px;
-            line-height: 10px;
-            text-align: center;
-            color: #666;
-            margin-top: 2px;
-            cursor: default;
-        }
+        /* EXCEL-LIKE TABLE STYLES */
+        .table-wrap { width: 100%; overflow-x: auto; background: white; border: 1px solid #000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .sku-table { width: 100%; border-collapse: collapse; min-width: 1200px; }
+        .sku-table th, .sku-table td { border: 1px solid #000; padding: 6px 8px; text-align: center; vertical-align: middle; }
+        
+        .sku-table thead th { background-color: #92d050; color: black; font-weight: bold; }
+        
+        .text-left { text-align: left !important; }
+        .sub-total-row td { background-color: #c6e0b4; font-weight: bold; }
+        
+        .excel-filter { display: inline-block; float: right; width: 12px; height: 12px; background-color: #ddd; border: 1px solid #999; font-size: 8px; line-height: 10px; text-align: center; color: #666; margin-top: 2px; }
     </style>
 </head>
 <body>
 
-    <h2>TRACKING SKU/ INVOICE IN JULY 2026</h2>
+<div id="loader-wrapper">
+    <div class="spinner" id="loader-spinner"></div>
+    <div class="loader-text" id="loader-text">ĐANG TẢI DỮ LIỆU TỪ SUPABASE...</div>
+</div>
 
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th rowspan="2" style="width: 5%;">HQ/<br><i>Vùng</i><div class="excel-filter">▼</div></th>
-                    <th rowspan="2" style="width: 8%;">PIC/<br><i>Người phụ trách</i><div class="excel-filter">▼</div></th>
-                    <th rowspan="2" style="width: 8%;">Area/<br><i>Khu vực</i><div class="excel-filter">▼</div></th>
-                    <th colspan="3">No. of HC</th>
-                    <th colspan="3">SKU/ invoice</th>
-                    <th rowspan="2" style="width: 6%;">SKU/invc<br>khu vực<div class="excel-filter">▼</div></th>
-                    <th rowspan="2" style="width: 6%;">SKU/invc<br>toàn quốc<div class="excel-filter">▼</div></th>
-                    <th colspan="4">No. of HC in July'26</th>
-                </tr>
-                <tr>
-                    <th style="width: 4%;">KAE<div class="excel-filter">▼</div></th>
-                    <th style="width: 4%;">DSR<div class="excel-filter">▼</div></th>
-                    <th style="width: 4%;">Total<div class="excel-filter">▼</div></th>
-                    <th style="width: 5%;">May<div class="excel-filter">▼</div></th>
-                    <th style="width: 5%;">June<div class="excel-filter">▼</div></th>
-                    <th style="width: 5%;">July<div class="excel-filter">▼</div></th>
-                    <th style="width: 12%;">Lower than area SKU/ invoice<br><i>Thấp hơn SKU/ invoice của khu vực</i><div class="excel-filter">▼</div></th>
-                    <th style="width: 6%;">% of Staff<div class="excel-filter">▼</div></th>
-                    <th style="width: 12%;">Lower than nationwide SKU/ invoice<br><i>Thấp hơn SKU/ invoice của toàn quốc</i><div class="excel-filter">▼</div></th>
-                    <th style="width: 6%;">% of Staff<div class="excel-filter">▼</div></th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Dữ liệu mẫu (South) -->
-                <tr>
-                    <td class="text-left">South</td>
-                    <td></td>
-                    <td class="text-left">HCMC</td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td>4</td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                </tr>
-                <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<h2>TRACKING SKU/ INVOICE IN JULY 2026</h2>
+
+<div class="table-wrap">
+    <table class="sku-table">
+        <thead>
+            <tr>
+                <th rowspan="2" style="width: 5%;">HQ/<br><i>Vùng</i><div class="excel-filter">▼</div></th>
+                <th rowspan="2" style="width: 8%;">PIC/<br><i>Người phụ trách</i><div class="excel-filter">▼</div></th>
+                <th rowspan="2" style="width: 10%;">Area/<br><i>Khu vực</i><div class="excel-filter">▼</div></th>
+                <th colspan="3">No. of HC</th>
+                <th colspan="3">SKU/ invoice</th>
+                <th rowspan="2" style="width: 6%;">SKU/invc<br>khu vực<div class="excel-filter">▼</div></th>
+                <th rowspan="2" style="width: 6%;">SKU/invc<br>toàn quốc<div class="excel-filter">▼</div></th>
+                <th colspan="4">No. of HC in July'26</th>
+            </tr>
+            <tr>
+                <th style="width: 4%;">KAE<div class="excel-filter">▼</div></th>
+                <th style="width: 4%;">DSR<div class="excel-filter">▼</div></th>
+                <th style="width: 4%;">Total<div class="excel-filter">▼</div></th>
+                <th style="width: 5%;">May<div class="excel-filter">▼</div></th>
+                <th style="width: 5%;">June<div class="excel-filter">▼</div></th>
+                <th style="width: 5%;">July<div class="excel-filter">▼</div></th>
+                <th style="width: 12%;">Lower than area SKU/ invoice<br><i>Thấp hơn SKU/ invoice của khu vực</i><div class="excel-filter">▼</div></th>
+                <th style="width: 5%;">% of Staff<div class="excel-filter">▼</div></th>
+                <th style="width: 12%;">Lower than nationwide SKU/ invoice<br><i>Thấp hơn SKU/ invoice của toàn quốc</i><div class="excel-filter">▼</div></th>
+                <th style="width: 5%;">% of Staff<div class="excel-filter">▼</div></th>
+            </tr>
+        </thead>
+        <tbody id="skuTrackingBody">
+            <!-- Dữ liệu render từ JS -->
+        </tbody>
+    </table>
+</div>
+
+<script>
+// ==========================================
+// 1. KẾT NỐI VÀ TẢI DỮ LIỆU BẢO MẬT TỪ SUPABASE
+// ==========================================
+let dbMaster = []; let dbSales = [];
+
+(async function () {
+    function handleFatalError(source) {
+        var loaderText = document.getElementById('loader-text');
+        var spinner = document.getElementById('loader-spinner');
+        if(spinner) spinner.style.display = 'none';
+        if(loaderText) {
+            loaderText.innerHTML = '<span style="color: #ef4444;">⚠️ LỖI BẢO MẬT HOẶC KẾT NỐI DỮ LIỆU<br>Không thể truy cập: ' + source + '</span>';
+        }
+    }
+
+    const SUPABASE_URL = 'https://mrqldgycwovpbmzdeuyz.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_itZfZBVw7bxE184tGh7x8A_0_r-QB5p';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const BUCKET_NAME = 'data';
+    const HUB_URL = 'https://nguyen842-ai.github.io/Tong-hop-bao-cao/'; 
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+        alert("Phiên đăng nhập đã hết hạn. Đang chuyển về Trang Hub...");
+        window.location.href = HUB_URL;
+        return; 
+    }
+
+    var version = '?t=' + new Date().getTime();
+    var localScripts = ['kamMap.js' + version]; 
+    var secureDataFiles = ['dataM5.js', 'dataM6.js', 'dataM7.js']; 
+
+    try {
+        const { data: signedUrlsData, error } = await supabase.storage
+            .from(BUCKET_NAME)
+            .createSignedUrls(secureDataFiles, 60);
+
+        if (error || !signedUrlsData) throw error;
+
+        var scriptsToLoad = [...localScripts];
+        signedUrlsData.forEach(item => {
+            if (item.error) throw new Error("Không có quyền đọc: " + item.path);
+            scriptsToLoad.push(item.signedUrl); 
+        });
+
+        var loadedScripts = 0;
+        var hasError = false;
+
+        scriptsToLoad.forEach(function(src) {
+            var script = document.createElement('script');
+            script.src = src;
+            script.onload = function() {
+                if (hasError) return;
+                loadedScripts++;
+                if (loadedScripts === scriptsToLoad.length) {
+                    if (typeof init === 'function') init();
+                }
+            };
+            script.onerror = function() {
+                hasError = true;
+                handleFatalError(src.split('?')[0].substring(0, 50) + '...');
+            };
+            document.body.appendChild(script);
+        });
+    } catch (err) {
+        console.error("Lỗi:", err);
+        handleFatalError("Dữ liệu bảo mật (Access Denied)");
+    }
+})();
+
+// ==========================================
+// 2. HÀM TÍNH TOÁN SKU VÀ RENDER BẢNG
+// ==========================================
+function cleanName(name) {
+    return String(name || "").replace(/[✔️❌]/g, '').trim().toUpperCase();
+}
+
+// Tính SKU trung bình (tái sử dụng logic gom hóa đơn của bạn)
+function calculateAvgSku(salesSubset) {
+    let salesSet = new Set();
+    let invoiceMap = {}; 
+    let sales = 0;
+    
+    salesSubset.forEach(d => {
+        let currentSales = Number(d.sales) || 0;
+        sales += currentSales; 
+        
+        if (currentSales > 0) {
+            if (d.cusCode) salesSet.add(d.cusCode);
+            // Key hóa đơn
+            let invKey = `${d.cusCode}_${d.day || ''}_${d.week || d.wiso || ''}_${d.month || ''}`;
+            if (!invoiceMap[invKey]) invoiceMap[invKey] = { sku: 0 };
+            invoiceMap[invKey].sku += (Number(d.skuLines) || 0);
+        }
+    });
+
+    let invoiceCount = Object.keys(invoiceMap).length; 
+    let totalSkuLines = 0;
+    for (let k in invoiceMap) { totalSkuLines += invoiceMap[k].sku; }
+
+    return invoiceCount > 0 ? (totalSkuLines / invoiceCount) : 0;
+}
+
+function renderTable() {
+    const tbody = document.getElementById('skuTrackingBody');
+    if (!dbSales || dbSales.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="15">Không có dữ liệu</td></tr>';
+        return;
+    }
+
+    let html = '';
+    
+    // Lấy danh sách HQ (Vùng)
+    let hqs = [...new Set(dbSales.map(d => d.hq))].filter(Boolean).sort();
+    
+    let natTotalKae = 0, natTotalDsr = 0, natTotalHC = 0;
+    
+    // TÍNH SKU TOÀN QUỐC (Giả định tháng 7 - month: 7 hoặc 'jul')
+    let natSalesJuly = dbSales.filter(d => String(d.month).includes('7') || String(d.month).toLowerCase().includes('jul'));
+    let natAvgSku = calculateAvgSku(natSalesJuly);
+
+    hqs.forEach(hq => {
+        let hqSales = dbSales.filter(d => d.hq === hq);
+        let areas = [...new Set(hqSales.map(d => d.area))].filter(Boolean).sort();
+        
+        let hqTotalKae = 0, hqTotalDsr = 0, hqTotalHC = 0;
+        
+        areas.forEach(area => {
+            let areaSales = hqSales.filter(d => d.area === area);
+            let pic = cleanName(areaSales[0].kam); // Tên KAM
+
+            // Đếm Headcount (Lọc từ dbMaster hoặc dbSales)
+            let staffs = [...new Set(areaSales.map(d => cleanName(d.kae)))].filter(Boolean);
+            let kaeCount = staffs.filter(s => s.includes('KAE')).length;
+            let dsrCount = staffs.filter(s => s.includes('DSR')).length;
+            let totalHC = kaeCount + dsrCount;
+
+            hqTotalKae += kaeCount; hqTotalDsr += dsrCount; hqTotalHC += totalHC;
+
+            // Phân loại data theo tháng (May, Jun, Jul - Tương đương 5, 6, 7)
+            let sMay = areaSales.filter(d => String(d.month).includes('5') || String(d.month).toLowerCase().includes('may'));
+            let sJun = areaSales.filter(d => String(d.month).includes('6') || String(d.month).toLowerCase().includes('jun'));
+            let sJul = areaSales.filter(d => String(d.month).includes('7') || String(d.month).toLowerCase().includes('jul'));
+
+            let avgMay = calculateAvgSku(sMay);
+            let avgJun = calculateAvgSku(sJun);
+            let avgJul = calculateAvgSku(sJul);
+            let areaAvgSku = avgJul; // SKU/invc khu vực lấy theo tháng hiện tại (Jul)
+
+            // Đếm staff có SKU thấp hơn khu vực & toàn quốc trong tháng 7
+            let lowerAreaCount = 0;
+            let lowerNatCount = 0;
+            
+            staffs.forEach(staff => {
+                let staffJulSales = sJul.filter(d => cleanName(d.kae) === staff);
+                let staffAvgSku = calculateAvgSku(staffJulSales);
                 
-                <!-- Hàng Total South -->
-                <tr class="total-row">
-                    <td colspan="3" class="text-left">Total South</td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                </tr>
+                if (staffAvgSku > 0 && staffAvgSku < areaAvgSku) lowerAreaCount++;
+                if (staffAvgSku > 0 && staffAvgSku < natAvgSku) lowerNatCount++;
+            });
 
-                <!-- Các hàng trống khác -->
-                <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+            let pctArea = totalHC ? ((lowerAreaCount / totalHC) * 100).toFixed(0) + '%' : '0%';
+            let pctNat = totalHC ? ((lowerNatCount / totalHC) * 100).toFixed(0) + '%' : '0%';
 
-                <!-- Hàng Total North -->
-                <tr class="total-row">
-                    <td colspan="3" class="text-left">Total North</td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
+            html += `
+                <tr>
+                    <td class="text-left">${hq}</td>
+                    <td class="text-left">${pic}</td>
+                    <td class="text-left">${area}</td>
+                    <td>${kaeCount || ''}</td>
+                    <td>${dsrCount || ''}</td>
+                    <td>${totalHC || ''}</td>
+                    <td>${avgMay ? avgMay.toFixed(1) : ''}</td>
+                    <td>${avgJun ? avgJun.toFixed(1) : ''}</td>
+                    <td>${avgJul ? avgJul.toFixed(1) : ''}</td>
+                    <td>${areaAvgSku ? areaAvgSku.toFixed(1) : ''}</td>
+                    <td>${natAvgSku ? natAvgSku.toFixed(1) : ''}</td>
+                    <td>${lowerAreaCount || ''}</td>
+                    <td>${pctArea}</td>
+                    <td>${lowerNatCount || ''}</td>
+                    <td>${pctNat}</td>
                 </tr>
+            `;
+        });
 
-                <!-- Hàng Total Nationwide -->
-                <tr class="total-row">
-                    <td colspan="3" class="text-left">Total Nationwide</td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td>3</td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+        // Dòng Tổng theo Vùng (Total South, Total North...)
+        natTotalKae += hqTotalKae; natTotalDsr += hqTotalDsr; natTotalHC += hqTotalHC;
+        html += `
+            <tr class="sub-total-row">
+                <td colspan="3" class="text-left">Total ${hq}</td>
+                <td>${hqTotalKae || ''}</td>
+                <td>${hqTotalDsr || ''}</td>
+                <td>${hqTotalHC || ''}</td>
+                <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+            </tr>
+        `;
+    });
+
+    // Dòng Tổng Toàn Quốc
+    html += `
+        <tr class="sub-total-row" style="background-color: #a9d08e;">
+            <td colspan="3" class="text-left">Total Nationwide</td>
+            <td>${natTotalKae || ''}</td>
+            <td>${natTotalDsr || ''}</td>
+            <td>${natTotalHC || ''}</td>
+            <td></td><td></td>
+            <td>${natAvgSku ? natAvgSku.toFixed(1) : ''}</td>
+            <td></td>
+            <td>${natAvgSku ? natAvgSku.toFixed(1) : ''}</td>
+            <td></td><td></td><td></td><td></td>
+        </tr>
+    `;
+
+    tbody.innerHTML = html;
+}
+
+// ==========================================
+// 3. KHỞI TẠO HỆ THỐNG
+// ==========================================
+function init() {
+    // Gom dữ liệu từ các file bảo mật
+    if (typeof dbMasterM5 !== 'undefined') dbMaster = dbMaster.concat(dbMasterM5);
+    if (typeof dbSalesM5 !== 'undefined')  dbSales  = dbSales.concat(dbSalesM5);
+    if (typeof dbMasterM6 !== 'undefined') dbMaster = dbMaster.concat(dbMasterM6);
+    if (typeof dbSalesM6 !== 'undefined')  dbSales  = dbSales.concat(dbSalesM6);
+    if (typeof dbMasterM7 !== 'undefined') dbMaster = dbMaster.concat(dbMasterM7);
+    if (typeof dbSalesM7 !== 'undefined')  dbSales  = dbSales.concat(dbSalesM7);
+
+    // Render bảng
+    renderTable();
+
+    // Tắt loading screen
+    setTimeout(() => {
+        const loader = document.getElementById('loader-wrapper');
+        loader.style.opacity = '0';
+        setTimeout(() => loader.style.display = 'none', 500);
+    }, 600);
+}
+</script>
 
 </body>
 </html>
