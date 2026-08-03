@@ -419,6 +419,18 @@ function init() {
     if (typeof dbMasterM7 !== 'undefined') dbMaster = dbMaster.concat(dbMasterM7);
     if (typeof dbSalesM7 !== 'undefined')  dbSales  = dbSales.concat(dbSalesM7);
 
+    // ==========================================
+    // BƯỚC MỚI THÊM: LOẠI BỎ NHÂN VIÊN BẮT ĐẦU BẰNG "KAM"
+    // ==========================================
+    const isNotKamStaff = (d) => {
+        let staffName = cleanName(d.kae, false);
+        return !staffName.startsWith('KAM');
+    };
+
+    dbMaster = dbMaster.filter(isNotKamStaff);
+    dbSales = dbSales.filter(isNotKamStaff);
+    // ==========================================
+
     initFilters();
     renderTable();
 
