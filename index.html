@@ -229,7 +229,7 @@ function initFilters() {
 }
 
 // ==========================================
-// 4. RENDER BẢNG (KẾT HỢP BỘ LỌC)
+// 4. RENDER BẢNG (KẾT HỢP BỘ LỌC VÀ LOGIC MỚI)
 // ==========================================
 function renderTable() {
     const tbody = document.getElementById('skuTrackingBody');
@@ -253,85 +253,97 @@ function renderTable() {
 
     let natTotalKae = 0, natTotalDsr = 0, natTotalHC = 0;
     
-    // TÍNH SKU TOÀN QUỐC THÁNG 7 (Luôn cố định không bị ảnh hưởng bởi filter khu vực)
+    // TÍNH SKU TOÀN QUỐC THÁNG 7 (Cố định để đối chiếu)
     let natSalesJuly = dbSales.filter(d => isMonth(d.month, 7));
     let natAvgSku = calculateAvgSku(natSalesJuly);
 
-    let hasRenderedAny = false; // Biến kiểm tra xem có dòng nào hiển thị không
+    let hasRenderedAny = false; 
 
+    // BƯỚC 1: LẶP THEO VÙNG (HQ)
     hqs.forEach(hq => {
         let hqData = allData.filter(d => d.hq === hq);
-        let areas = [...new Set(hqData.map(d => d.area))].filter(Boolean).sort();
-        if (selArea !== "ALL") areas = areas.filter(a => a === selArea);
+        
+        // BƯỚC 2: LẶP THEO PIC (KAM) THAY VÌ AREA ĐỂ TÍNH AVG SKU CHUẨN CHO KAM
+        let kams = [...new Set(hqData.map(d => cleanName(d.kam)))].filter(Boolean).sort();
+        if (selPIC !== "ALL") kams = kams.filter(k => k === selPIC);
         
         let hqTotalKae = 0, hqTotalDsr = 0, hqTotalHC = 0;
         let hqHasData = false;
 
-        areas.forEach(area => {
-            let aMaster = dbMaster.filter(d => d.hq === hq && d.area === area);
-            let aSales = dbSales.filter(d => d.hq === hq && d.area === area);
+        kams.forEach(kam => {
+            let kamData = hqData.filter(d => cleanName(d.kam) === kam);
             
-            let rawKam = aMaster.length > 0 ? aMaster[0].kam : (aSales.length > 0 ? aSales[0].kam : '');
-            let pic = cleanName(rawKam);
+            // BƯỚC 3: LẶP THEO KHU VỰC (AREA) MÀ KAM ĐÓ PHỤ TRÁCH
+            let areas = [...new Set(kamData.map(d => d.area))].filter(Boolean).sort();
+            if (selArea !== "ALL") areas = areas.filter(a => a === selArea);
 
-            // Áp dụng bộ lọc PIC
-            if (selPIC !== "ALL" && pic !== selPIC) return;
-
-            hqHasData = true; hasRenderedAny = true;
-
-            let rawStaffs = [...aMaster.map(d => d.kae), ...aSales.map(d => d.kae)];
-            let staffs = [...new Set(rawStaffs.map(n => cleanName(n)))].filter(Boolean);
-            
-            let kaeCount = staffs.filter(s => s.includes('KAE')).length;
-            let dsrCount = staffs.filter(s => s.includes('DSR')).length;
-            let totalHC = kaeCount + dsrCount;
-
-            hqTotalKae += kaeCount; hqTotalDsr += dsrCount; hqTotalHC += totalHC;
-
-            let sMay = aSales.filter(d => isMonth(d.month, 5));
-            let sJun = aSales.filter(d => isMonth(d.month, 6));
-            let sJul = aSales.filter(d => isMonth(d.month, 7));
-
-            let avgMay = calculateAvgSku(sMay);
-            let avgJun = calculateAvgSku(sJun);
-            let avgJul = calculateAvgSku(sJul);
-            let areaAvgSku = avgJul;
-
-            let lowerAreaCount = 0;
-            let lowerNatCount = 0;
-            
-            staffs.forEach(staff => {
-                let staffJulSales = sJul.filter(d => cleanName(d.kae) === staff);
-                let staffAvgSku = calculateAvgSku(staffJulSales);
+            areas.forEach(area => {
+                let aMaster = dbMaster.filter(d => d.hq === hq && cleanName(d.kam) === kam && d.area === area);
+                let aSales = dbSales.filter(d => d.hq === hq && cleanName(d.kam) === kam && d.area === area);
                 
-                if (staffAvgSku > 0 && staffAvgSku < areaAvgSku) lowerAreaCount++;
-                if (staffAvgSku > 0 && staffAvgSku < natAvgSku) lowerNatCount++;
+                hqHasData = true; hasRenderedAny = true;
+
+                // LOGIC 1: DISTINCT COUNT KAE VÀ DSR CHỈ TRONG THÁNG 7
+                let aMasterJul = aMaster.filter(d => isMonth(d.month, 7));
+                let aSalesJul = aSales.filter(d => isMonth(d.month, 7));
+                
+                let rawStaffsJul = [...aMasterJul.map(d => d.kae), ...aSalesJul.map(d => d.kae)];
+                let staffsJul = [...new Set(rawStaffsJul.map(n => cleanName(n)))].filter(Boolean); // Lọc trùng
+                
+                let kaeCount = staffsJul.filter(s => s.includes('KAE')).length;
+                let dsrCount = staffsJul.filter(s => s.includes('DSR')).length;
+                let totalHC = kaeCount + dsrCount;
+
+                hqTotalKae += kaeCount; hqTotalDsr += dsrCount; hqTotalHC += totalHC;
+
+                // LOGIC 2: TÍNH AVG SKU CHO KAM TẠI KHU VỰC NÀY TRONG TỪNG THÁNG
+                let sMay = aSales.filter(d => isMonth(d.month, 5));
+                let sJun = aSales.filter(d => isMonth(d.month, 6));
+                let sJul = aSalesJul;
+
+                let avgMay = calculateAvgSku(sMay);
+                let avgJun = calculateAvgSku(sJun);
+                let avgJul = calculateAvgSku(sJul);
+                let areaAvgSku = avgJul; // SKU của khu vực đó trong tháng 7 (để đối chiếu với Staff)
+
+                // LOGIC 3: SO SÁNH NHÂN VIÊN TRONG THÁNG 7 (Lower than Area/Nationwide)
+                let lowerAreaCount = 0;
+                let lowerNatCount = 0;
+                
+                staffsJul.forEach(staff => {
+                    let staffJulSales = sJul.filter(d => cleanName(d.kae) === staff);
+                    let staffAvgSku = calculateAvgSku(staffJulSales);
+                    
+                    if (staffAvgSku > 0 && staffAvgSku < areaAvgSku) lowerAreaCount++;
+                    if (staffAvgSku > 0 && staffAvgSku < natAvgSku) lowerNatCount++;
+                });
+
+                let pctArea = totalHC ? ((lowerAreaCount / totalHC) * 100).toFixed(0) + '%' : '0%';
+                let pctNat = totalHC ? ((lowerNatCount / totalHC) * 100).toFixed(0) + '%' : '0%';
+
+                html += `
+                    <tr>
+                        <td class="text-left">${hq}</td>
+                        <td class="text-left">${kam}</td>
+                        <td class="text-left">${area}</td>
+                        <td>${kaeCount || ''}</td>
+                        <td>${dsrCount || ''}</td>
+                        <td>${totalHC || ''}</td>
+                        <td>${avgMay ? avgMay.toFixed(1) : ''}</td>
+                        <td>${avgJun ? avgJun.toFixed(1) : ''}</td>
+                        <td>${avgJul ? avgJul.toFixed(1) : ''}</td>
+                        <td>${areaAvgSku ? areaAvgSku.toFixed(1) : ''}</td>
+                        <td>${natAvgSku ? natAvgSku.toFixed(1) : ''}</td>
+                        <td>${lowerAreaCount || ''}</td>
+                        <td>${pctArea}</td>
+                        <td>${lowerNatCount || ''}</td>
+                        <td>${pctNat}</td>
+                    </tr>
+                `;
             });
-
-            let pctArea = totalHC ? ((lowerAreaCount / totalHC) * 100).toFixed(0) + '%' : '0%';
-            let pctNat = totalHC ? ((lowerNatCount / totalHC) * 100).toFixed(0) + '%' : '0%';
-
-            html += `
-                <tr>
-                    <td class="text-left">${hq}</td>
-                    <td class="text-left">${pic}</td>
-                    <td class="text-left">${area}</td>
-                    <td>${kaeCount || ''}</td>
-                    <td>${dsrCount || ''}</td>
-                    <td>${totalHC || ''}</td>
-                    <td>${avgMay ? avgMay.toFixed(1) : ''}</td>
-                    <td>${avgJun ? avgJun.toFixed(1) : ''}</td>
-                    <td>${avgJul ? avgJul.toFixed(1) : ''}</td>
-                    <td>${areaAvgSku ? areaAvgSku.toFixed(1) : ''}</td>
-                    <td>${natAvgSku ? natAvgSku.toFixed(1) : ''}</td>
-                    <td>${lowerAreaCount || ''}</td>
-                    <td>${pctArea}</td>
-                    <td>${lowerNatCount || ''}</td>
-                    <td>${pctNat}</td>
-                </tr>
-            `;
         });
 
+        // DÒNG TỔNG THEO VÙNG (HQ)
         if (hqHasData) {
             natTotalKae += hqTotalKae; natTotalDsr += hqTotalDsr; natTotalHC += hqTotalHC;
             
@@ -352,6 +364,7 @@ function renderTable() {
         return;
     }
 
+    // DÒNG TỔNG TOÀN QUỐC
     html += `
         <tr class="sub-total-row" style="background-color: #a9d08e;">
             <td colspan="3" class="text-left">Total Nationwide</td>
