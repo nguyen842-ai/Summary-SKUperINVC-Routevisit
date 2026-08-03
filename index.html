@@ -420,15 +420,22 @@ function init() {
     if (typeof dbSalesM7 !== 'undefined')  dbSales  = dbSales.concat(dbSalesM7);
 
     // ==========================================
-    // BƯỚC MỚI THÊM: LOẠI BỎ NHÂN VIÊN BẮT ĐẦU BẰNG "KAM"
+    // BƯỚC MỚI THÊM: LỌC NHÂN SỰ
+    // 1. Loại bỏ nhân viên bắt đầu bằng "KAM"
+    // 2. Loại bỏ nhân viên INACTIVE (có chứa dấu ❌)
     // ==========================================
-    const isNotKamStaff = (d) => {
-        let staffName = cleanName(d.kae, false);
-        return !staffName.startsWith('KAM');
+    const isValidStaff = (d) => {
+        let rawName = String(d.kae || "").trim().toUpperCase();
+        
+        // Nếu tên chứa chữ KAM hoặc có ký tự ❌ thì loại bỏ luôn
+        if (rawName.includes('KAM') || rawName.includes('❌')) {
+            return false;
+        }
+        return true;
     };
 
-    dbMaster = dbMaster.filter(isNotKamStaff);
-    dbSales = dbSales.filter(isNotKamStaff);
+    dbMaster = dbMaster.filter(isValidStaff);
+    dbSales = dbSales.filter(isValidStaff);
     // ==========================================
 
     initFilters();
