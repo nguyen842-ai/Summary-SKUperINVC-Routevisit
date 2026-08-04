@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dashboard Tổng Hợp (SKU & Route Map)</title>
+    <title>MEETING AUG.2026 (SKU & Route Map) </title>
     
     <!-- Thư viện Supabase, SheetJS & Leaflet -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -450,7 +450,7 @@ async function loadRouteData() {
                 }
                 
                 // Cột Doanh số (Thêm điều kiện chưa vat)
-                if (val.includes('thành tiền') || val.includes('doanh số') || val.includes('doanh thu') || val.includes('thanh tien') || val.includes('chưa vat') || val.includes('chua vat')) {
+                if (val.includes('thành tiền') || val.includes('doanh số') || val.includes('doanh thu') || val.includes('thanh tien') || val.includes('CHƯA VAT') || val.includes('chua vat')) {
                     colOrderSales = j;
                 }
             }
