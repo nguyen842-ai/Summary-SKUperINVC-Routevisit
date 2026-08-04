@@ -17,15 +17,20 @@
             color: #0f172a;
         }
 
+        /* ----- TIÊU ĐỀ ----- */
         .header-bar {
             background-color: #002060;
             color: white;
             padding: 12px 20px;
             font-size: 18px;
             font-weight: bold;
+            text-transform: uppercase;
         }
         .header-bar span.kae-name {
-            color: #92D050; /* Xanh lá mạ giống trong ảnh */
+            color: #92D050; /* Xanh lá mạ */
+        }
+        .header-bar span.time-range {
+            color: white; 
         }
 
         .main-container {
@@ -35,7 +40,7 @@
             align-items: flex-start;
         }
 
-        /* ----- BẢN ĐỒ BÊN TRÁI ----- */
+        /* ----- BẢN ĐỒ ----- */
         #map-container {
             flex: 1;
             height: 500px;
@@ -52,7 +57,7 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.4); font-size: 10px;
         }
 
-        /* ----- BẢNG BÁO CÁO BÊN PHẢI ----- */
+        /* ----- BẢNG BÁO CÁO ----- */
         #report-container {
             flex: 1.2;
             display: flex;
@@ -117,9 +122,11 @@
             color: #b91c1c; /* Đỏ đô */
             font-weight: bold;
             font-size: 15px;
+            font-style: italic;
         }
         .warning-icon {
             width: 30px; height: 30px;
+            flex-shrink: 0;
         }
 
     </style>
@@ -128,12 +135,11 @@
 
     <!-- Tiêu đề trên cùng -->
     <div class="header-bar">
-        Summary Route Map of <span class="kae-name" id="ui-kae-name">KAE NGUYỄN QUÝ NGỌC</span> from <span id="ui-date-range">10/07/2026 - 16/07/2026</span>
+        SUMMARY ROUTE MAP OF <span class="kae-name" id="ui-kae-name">KAE NGUYỄN QUÝ NGỌC</span> <span class="time-range" id="ui-date-range">IN JULY 2026</span>
     </div>
 
     <!-- Khu vực chính -->
     <div class="main-container">
-        
         <!-- Bản đồ -->
         <div id="map-container">
             <div id="map"></div>
@@ -163,7 +169,7 @@
                     </tr>
                 </thead>
                 <tbody id="table-body">
-                    <!-- Data sẽ được render vào đây -->
+                    <!-- Dữ liệu render từ JS -->
                 </tbody>
                 <tfoot id="table-foot">
                     <!-- Dòng tổng cộng -->
@@ -171,50 +177,46 @@
             </table>
             
             <div class="timestamp">
-                Thời gian: <span id="ui-timestamp">10/07/2026 - 16/07/2026</span>
+                Thời gian: <span id="ui-timestamp">IN JULY 2026</span>
             </div>
         </div>
     </div>
 
     <!-- Vùng hiển thị Cảnh báo từ App Script -->
-    <div class="warnings-section" id="warnings-list">
-        <!-- Nếu có dữ liệu từ Google Sheet, nó sẽ append vào đây -->
-    </div>
+    <div class="warnings-section" id="warnings-list"></div>
 
 <script>
-    // 1. LINK WEB APP GOOGLE APPS SCRIPT
-    // THAY BẰNG URL BẠN VỪA DEPLOY Ở BƯỚC 1
-    const GAS_WEB_APP_URL = "ĐIỀN_LINK_WEB_APP_URL_CỦA_BẠN_VÀO_ĐÂY";
+    // 1. LINK APP SCRIPT BẠN CUNG CẤP
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx6QPUONb23T44O8i3n0oiTGvRE4FWRFJ2OaQclhZO4HQZDF7_y-6rQZsh0PFmhpvqM/exec";
 
-    // Khởi tạo bản đồ
+    // Khởi tạo bản đồ Leaflet
     const map = L.map('map').setView([10.8231, 106.6297], 10);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
     let routeLayer = L.layerGroup().addTo(map);
 
     // =====================================
-    // HÀM XỬ LÝ CHUỖI TÊN ĐỂ GỌI GOOGLE SHEET
+    // HÀM XỬ LÝ TÊN KAE
+    // Cắt "KAE " hoặc "DSR " ở đầu và viết hoa để khớp tên Sheet
     // =====================================
     function getCleanKaeName(rawName) {
-        // Cắt chữ "KAE" hoặc "DSR" ở đầu và các khoảng trắng thừa
-        // Trả về tên viết hoa để trùng với tên Sheet (VD: "NGUYỄN QUÝ NGỌC")
-        let clean = String(rawName).replace(/^(KAE|DSR)\s+/i, '').trim().toUpperCase();
-        return clean;
+        return String(rawName).replace(/^(KAE|DSR)\s+/i, '').trim().toUpperCase();
     }
 
     // =====================================
-    // HÀM GỌI API LẤY CẢNH BÁO TỪ GOOGLE SHEET
+    // HÀM GỌI API LẤY CẢNH BÁO QUA APP SCRIPT
     // =====================================
     async function fetchWarnings(rawName) {
         const warningsContainer = document.getElementById('warnings-list');
-        warningsContainer.innerHTML = '<i>Đang tải nhận xét từ Google Sheet...</i>';
+        warningsContainer.innerHTML = '<i>Đang tải nhận xét từ hệ thống...</i>';
         
         let sheetName = getCleanKaeName(rawName);
 
         try {
+            // Nối parameter kaeName vào cuối URL App Script
             let response = await fetch(`${GAS_WEB_APP_URL}?kaeName=${encodeURIComponent(sheetName)}`);
             let data = await response.json();
 
-            warningsContainer.innerHTML = ''; // Xoá chữ loading
+            warningsContainer.innerHTML = ''; // Xoá text loading
 
             if (data.status === "success" && data.comments && data.comments.length > 0) {
                 data.comments.forEach(comment => {
@@ -231,38 +233,33 @@
                     warningsContainer.insertAdjacentHTML('beforeend', warnHTML);
                 });
             } else {
-                warningsContainer.innerHTML = '<span style="color:#64748b;">(Không có cảnh báo nào cho nhân viên này)</span>';
+                warningsContainer.innerHTML = '<span style="color:#64748b; font-style: italic;">(Không có cảnh báo nào cho nhân viên này)</span>';
             }
         } catch (error) {
             console.error("Lỗi lấy comment:", error);
-            warningsContainer.innerHTML = '<span style="color:#64748b;">(Lỗi kết nối tới Google Sheet)</span>';
+            warningsContainer.innerHTML = '<span style="color:#b91c1c;">(Lỗi kết nối tới App Script)</span>';
         }
     }
 
     // =====================================
-    // HÀM RENDER DỮ LIỆU BẢN ĐỒ VÀ BẢNG
-    // Giả lập Dữ liệu - Bạn nối data từ Supabase của bạn vào hàm này
+    // HÀM RENDER DỮ LIỆU BẢN ĐỒ VÀ BẢNG (Giả lập để test giao diện)
     // =====================================
-    function renderDashboard(employeeData, rawName, area, npp, dateRange) {
-        // 1. Cập nhật Text trên UI
+    function renderDashboard(employeeData, rawName, area, npp, dateRangeText) {
+        // Cập nhật Text trên UI
         document.getElementById('ui-kae-name').innerText = rawName.toUpperCase();
         document.getElementById('ui-staff').innerText = rawName;
         document.getElementById('ui-area').innerText = area;
         document.getElementById('ui-npp').innerText = npp;
-        document.getElementById('ui-date-range').innerText = dateRange;
-        document.getElementById('ui-timestamp').innerText = dateRange;
+        document.getElementById('ui-date-range').innerText = dateRangeText;
+        document.getElementById('ui-timestamp').innerText = dateRangeText;
 
-        // 2. Load cảnh báo từ Google Sheet
+        // Gọi App Script lấy cảnh báo
         fetchWarnings(rawName);
 
-        // -- LOGIC RENDER MAP & TABLE SẼ CHẠY Ở ĐÂY --
-        // (Sử dụng các hàm drawMap() và logic tính toán của bộ code 1 của bạn)
-        // Mình sẽ mô phỏng việc điền bảng từ data giả lập để giao diện giống 100% hình.
-        
+        // Render bảng dữ liệu
         const tbody = document.getElementById('table-body');
         const tfoot = document.getElementById('table-foot');
         
-        // Giả lập data giống trong ảnh
         const mockData = [
             { day: "Thứ 2", in: "09:24:52", out: "15:45:03", visit: 20, order: 12, sales: 9816360, dist: 14.75 },
             { day: "Thứ 3", in: "09:23:44", out: "15:39:28", visit: 19, order: 11, sales: 11247660, dist: 42.78 },
@@ -302,9 +299,8 @@
         `;
     }
 
-    // KHỞI CHẠY TEST
-    // Gọi hàm này sau khi user chọn Nhân viên ở trang chính của bạn
-    renderDashboard("KAE Nguyễn Quý Ngọc", "KAE Nguyễn Quý Ngọc", "3. South Mekong", "Thiện Văn Minh Phát", "10/07/2026 - 16/07/2026");
+    // GỌI HÀM RENDER ĐỂ KHỞI TẠO BẢNG DEMO VÀ FETCH CẢNH BÁO
+    renderDashboard("KAE Nguyễn Quý Ngọc", "KAE Nguyễn Quý Ngọc", "3. South Mekong", "Thiện Văn Minh Phát", "IN JULY 2026");
 
 </script>
 </body>
