@@ -1,37 +1,311 @@
-function doGet(e) {
-  // Trả về định dạng JSON, hỗ trợ CORS
-  var output = ContentService.createTextOutput();
-  output.setMimeType(ContentService.MimeType.JSON);
-  
-  try {
-    // ID Sheet lấy từ URL của bạn
-    var sheetId = '1Wz87qszHZmT-JhcU7SG2YLjOgKntRSroIR-U4Zuu5ys';
-    var ss = SpreadsheetApp.openById(sheetId);
-    
-    // Lấy tên nhân viên truyền vào từ tham số URL
-    var kaeName = e.parameter.kaeName; 
-    if (!kaeName) {
-      return output.setContent(JSON.stringify({ status: "error", message: "Thiếu tham số kaeName" }));
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Summary Route Map Report</title>
+
+    <!-- Thư viện Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        body, html {
+            margin: 0; padding: 0; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #ffffff;
+            color: #0f172a;
+        }
+
+        .header-bar {
+            background-color: #002060;
+            color: white;
+            padding: 12px 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .header-bar span.kae-name {
+            color: #92D050; /* Xanh lá mạ giống trong ảnh */
+        }
+
+        .main-container {
+            display: flex;
+            padding: 20px;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        /* ----- BẢN ĐỒ BÊN TRÁI ----- */
+        #map-container {
+            flex: 1;
+            height: 500px;
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            position: relative;
+            min-width: 400px;
+        }
+        #map { width: 100%; height: 100%; }
+        .route-marker {
+            border-radius: 50%; color: white; font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
+            width: 20px; height: 20px; border: 1.5px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4); font-size: 10px;
+        }
+
+        /* ----- BẢNG BÁO CÁO BÊN PHẢI ----- */
+        #report-container {
+            flex: 1.2;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .report-title-section {
+            text-align: center;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 15px;
+        }
+        .report-title-section h2 {
+            margin: 0; color: #002060; font-size: 24px; text-transform: uppercase;
+        }
+        .report-title-section p {
+            margin: 5px 0 0 0; font-size: 14px; color: #333;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th, td {
+            border: 1px solid #cbd5e1;
+            padding: 10px 5px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        thead th {
+            background-color: #f8fafc;
+            color: #1e293b;
+            font-weight: bold;
+        }
+        tbody tr td:first-child { font-weight: bold; }
+        
+        .total-row td {
+            background-color: #e2e8f0;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .col-blue { color: #2563eb; font-weight: bold; }
+        .col-orange { color: #d97706; font-weight: bold; }
+        .col-green { color: #15803d; font-weight: bold; }
+        .col-navy { color: #002060; font-weight: bold; }
+        
+        .timestamp {
+            text-align: right; font-size: 11px; color: #64748b; font-style: italic;
+            margin-top: 10px;
+        }
+
+        /* ----- PHẦN CẢNH BÁO MÀU ĐỎ ----- */
+        .warnings-section {
+            padding: 10px 20px 30px 20px;
+        }
+        .warning-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 12px;
+            color: #b91c1c; /* Đỏ đô */
+            font-weight: bold;
+            font-size: 15px;
+        }
+        .warning-icon {
+            width: 30px; height: 30px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Tiêu đề trên cùng -->
+    <div class="header-bar">
+        Summary Route Map of <span class="kae-name" id="ui-kae-name">KAE NGUYỄN QUÝ NGỌC</span> from <span id="ui-date-range">10/07/2026 - 16/07/2026</span>
+    </div>
+
+    <!-- Khu vực chính -->
+    <div class="main-container">
+        
+        <!-- Bản đồ -->
+        <div id="map-container">
+            <div id="map"></div>
+        </div>
+
+        <!-- Bảng báo cáo -->
+        <div id="report-container">
+            <div class="report-title-section">
+                <h2>BÁO CÁO TỔNG HỢP TUẦN</h2>
+                <p>
+                    Khu vực: <b id="ui-area">3. South Mekong</b> | 
+                    NPP: <b id="ui-npp">Thiện Văn Minh Phát</b> | 
+                    Nhân viên: <b id="ui-staff">KAE Nguyễn Quý Ngọc</b>
+                </p>
+            </div>
+
+            <table id="summary-table">
+                <thead>
+                    <tr>
+                        <th>Ngày làm<br>việc</th>
+                        <th>Giờ Check-in</th>
+                        <th>Giờ Check-out</th>
+                        <th>Số KH<br>viếng thăm</th>
+                        <th>Số KH<br>lên đơn</th>
+                        <th>Tổng Doanh số</th>
+                        <th>Quãng đường</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <!-- Data sẽ được render vào đây -->
+                </tbody>
+                <tfoot id="table-foot">
+                    <!-- Dòng tổng cộng -->
+                </tfoot>
+            </table>
+            
+            <div class="timestamp">
+                Thời gian: <span id="ui-timestamp">10/07/2026 - 16/07/2026</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vùng hiển thị Cảnh báo từ App Script -->
+    <div class="warnings-section" id="warnings-list">
+        <!-- Nếu có dữ liệu từ Google Sheet, nó sẽ append vào đây -->
+    </div>
+
+<script>
+    // 1. LINK WEB APP GOOGLE APPS SCRIPT
+    // THAY BẰNG URL BẠN VỪA DEPLOY Ở BƯỚC 1
+    const GAS_WEB_APP_URL = "ĐIỀN_LINK_WEB_APP_URL_CỦA_BẠN_VÀO_ĐÂY";
+
+    // Khởi tạo bản đồ
+    const map = L.map('map').setView([10.8231, 106.6297], 10);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
+    let routeLayer = L.layerGroup().addTo(map);
+
+    // =====================================
+    // HÀM XỬ LÝ CHUỖI TÊN ĐỂ GỌI GOOGLE SHEET
+    // =====================================
+    function getCleanKaeName(rawName) {
+        // Cắt chữ "KAE" hoặc "DSR" ở đầu và các khoảng trắng thừa
+        // Trả về tên viết hoa để trùng với tên Sheet (VD: "NGUYỄN QUÝ NGỌC")
+        let clean = String(rawName).replace(/^(KAE|DSR)\s+/i, '').trim().toUpperCase();
+        return clean;
     }
 
-    // Tìm sheet trùng với tên nhân viên đã xử lý
-    var sheet = ss.getSheetByName(kaeName);
-    if (!sheet) {
-      return output.setContent(JSON.stringify({ status: "error", message: "Không tìm thấy sheet: " + kaeName }));
+    // =====================================
+    // HÀM GỌI API LẤY CẢNH BÁO TỪ GOOGLE SHEET
+    // =====================================
+    async function fetchWarnings(rawName) {
+        const warningsContainer = document.getElementById('warnings-list');
+        warningsContainer.innerHTML = '<i>Đang tải nhận xét từ Google Sheet...</i>';
+        
+        let sheetName = getCleanKaeName(rawName);
+
+        try {
+            let response = await fetch(`${GAS_WEB_APP_URL}?kaeName=${encodeURIComponent(sheetName)}`);
+            let data = await response.json();
+
+            warningsContainer.innerHTML = ''; // Xoá chữ loading
+
+            if (data.status === "success" && data.comments && data.comments.length > 0) {
+                data.comments.forEach(comment => {
+                    let warnHTML = `
+                        <div class="warning-item">
+                            <svg class="warning-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 2L2 22H22L12 2Z" fill="#b91c1c" stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M12 9V15" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M12 19H12.01" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>${comment}</span>
+                        </div>
+                    `;
+                    warningsContainer.insertAdjacentHTML('beforeend', warnHTML);
+                });
+            } else {
+                warningsContainer.innerHTML = '<span style="color:#64748b;">(Không có cảnh báo nào cho nhân viên này)</span>';
+            }
+        } catch (error) {
+            console.error("Lỗi lấy comment:", error);
+            warningsContainer.innerHTML = '<span style="color:#64748b;">(Lỗi kết nối tới Google Sheet)</span>';
+        }
     }
 
-    // Giả sử các dòng cảnh báo được viết ở Cột A. Lấy toàn bộ dữ liệu cột A.
-    var data = sheet.getDataRange().getValues();
-    var comments = [];
-    
-    for (var i = 0; i < data.length; i++) {
-      if (data[i][0] && String(data[i][0]).trim() !== "") {
-        comments.push(String(data[i][0]).trim());
-      }
+    // =====================================
+    // HÀM RENDER DỮ LIỆU BẢN ĐỒ VÀ BẢNG
+    // Giả lập Dữ liệu - Bạn nối data từ Supabase của bạn vào hàm này
+    // =====================================
+    function renderDashboard(employeeData, rawName, area, npp, dateRange) {
+        // 1. Cập nhật Text trên UI
+        document.getElementById('ui-kae-name').innerText = rawName.toUpperCase();
+        document.getElementById('ui-staff').innerText = rawName;
+        document.getElementById('ui-area').innerText = area;
+        document.getElementById('ui-npp').innerText = npp;
+        document.getElementById('ui-date-range').innerText = dateRange;
+        document.getElementById('ui-timestamp').innerText = dateRange;
+
+        // 2. Load cảnh báo từ Google Sheet
+        fetchWarnings(rawName);
+
+        // -- LOGIC RENDER MAP & TABLE SẼ CHẠY Ở ĐÂY --
+        // (Sử dụng các hàm drawMap() và logic tính toán của bộ code 1 của bạn)
+        // Mình sẽ mô phỏng việc điền bảng từ data giả lập để giao diện giống 100% hình.
+        
+        const tbody = document.getElementById('table-body');
+        const tfoot = document.getElementById('table-foot');
+        
+        // Giả lập data giống trong ảnh
+        const mockData = [
+            { day: "Thứ 2", in: "09:24:52", out: "15:45:03", visit: 20, order: 12, sales: 9816360, dist: 14.75 },
+            { day: "Thứ 3", in: "09:23:44", out: "15:39:28", visit: 19, order: 11, sales: 11247660, dist: 42.78 },
+            { day: "Thứ 4", in: "08:37:23", out: "16:00:38", visit: 19, order: 7, sales: 23670660, dist: 17.01 },
+            { day: "Thứ 5", in: "08:54:03", out: "15:34:26", visit: 19, order: 10, sales: 15148620, dist: 6.05 },
+            { day: "Thứ 6", in: "09:34:00", out: "15:19:25", visit: 19, order: 9, sales: 14892120, dist: 12.21 },
+            { day: "Thứ 7", in: "09:28:31", out: "15:45:10", visit: 19, order: 12, sales: 10961520, dist: 61.98 }
+        ];
+
+        let tVisit = 0, tOrder = 0, tSales = 0, tDist = 0;
+        tbody.innerHTML = "";
+
+        mockData.forEach(r => {
+            tVisit += r.visit; tOrder += r.order; tSales += r.sales; tDist += r.dist;
+            let tr = `
+                <tr>
+                    <td>${r.day}</td>
+                    <td>${r.in}</td>
+                    <td>${r.out}</td>
+                    <td class="col-blue">${r.visit}</td>
+                    <td class="col-orange">${r.order}</td>
+                    <td class="col-green">${new Intl.NumberFormat('en-US').format(r.sales)}</td>
+                    <td>${r.dist.toFixed(2)} km</td>
+                </tr>
+            `;
+            tbody.insertAdjacentHTML('beforeend', tr);
+        });
+
+        tfoot.innerHTML = `
+            <tr class="total-row">
+                <td colspan="3" style="text-align: right; padding-right: 20px;">TỔNG CỘNG TUẦN:</td>
+                <td class="col-blue">${tVisit}</td>
+                <td class="col-orange">${tOrder}</td>
+                <td class="col-green">${new Intl.NumberFormat('en-US').format(tSales)}</td>
+                <td class="col-navy">${tDist.toFixed(2)} km</td>
+            </tr>
+        `;
     }
 
-    return output.setContent(JSON.stringify({ status: "success", comments: comments }));
-  } catch (error) {
-    return output.setContent(JSON.stringify({ status: "error", message: error.toString() }));
-  }
-}
+    // KHỞI CHẠY TEST
+    // Gọi hàm này sau khi user chọn Nhân viên ở trang chính của bạn
+    renderDashboard("KAE Nguyễn Quý Ngọc", "KAE Nguyễn Quý Ngọc", "3. South Mekong", "Thiện Văn Minh Phát", "10/07/2026 - 16/07/2026");
+
+</script>
+</body>
+</html>
