@@ -438,13 +438,21 @@ async function loadRouteData() {
         let wbDH = XLSX.read(bDH, {type: 'array'});
         rawOrderData = XLSX.utils.sheet_to_json(wbDH.Sheets[wbDH.SheetNames[0]], {header: 1});
         
-        // Tìm cột PO & Sales (Quét 100 dòng và thêm từ khóa như bản gốc)
+        // Tìm cột PO & Sales (Quét 100 dòng và bổ sung từ khóa "chưa vat")
         for (let i = 0; i < Math.min(100, rawOrderData.length); i++) {
             if(!rawOrderData[i]) continue;
             for (let j = 0; j < rawOrderData[i].length; j++) {
                 let val = String(rawOrderData[i][j] || '').toLowerCase().replace(/\s+/g, ' ').trim();
-                if (val.includes('mã đơn hàng') || val.includes('mã đh') || val.includes('order') || val === 'po') colOrderPO = j;
-                if (val.includes('thành tiền') || val.includes('doanh số') || val.includes('doanh thu') || val.includes('thanh tien')) colOrderSales = j;
+                
+                // Cột Mã đơn hàng
+                if (val.includes('MÃ ĐƠN ĐẶT HÀNG') || val.includes('MÃ ĐƠN HÀNG') || val.includes('order') || val === 'po') {
+                    colOrderPO = j;
+                }
+                
+                // Cột Doanh số (Thêm điều kiện chưa vat)
+                if (val.includes('thành tiền') || val.includes('doanh số') || val.includes('doanh thu') || val.includes('thanh tien') || val.includes('chưa vat') || val.includes('chua vat')) {
+                    colOrderSales = j;
+                }
             }
         }
 
