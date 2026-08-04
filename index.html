@@ -406,32 +406,27 @@ function exportExcel() {
     XLSX.writeFile(wb, "Tracking_SKU_Invoice.xlsx");
 }
 
-
 // =====================================================================
 // PHẦN 2: LOGIC TAB 2 (ROUTE MAP BÁO CÁO TUẦN)
 // =====================================================================
 
-// --- Danh sách máy chủ tile dự phòng (nếu server chính chậm/lỗi sẽ dùng cái tiếp theo) ---
-const TILE_PROVIDERS = [
-    { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', subdomains: 'abcd' },
-    { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', subdomains: 'abc' }
-];
-
-let map = null;               // Bản đồ chỉ khởi tạo khi thực sự cần (lazy init) để không cản trở tải Tab 1
+let map = null;               
 let routeLayer = null;
-let currentTileIndex = 0;
-let currentTileLayer = null;
 
 function ensureMapInitialized() {
-    if (map) return; // đã khởi tạo rồi
+    if (map) return; // Nếu đã khởi tạo rồi thì bỏ qua
 
     map = L.map('map', {
-        preferCanvas: true,
-        zoomAnimation: true
+        preferCanvas: true, // Giúp vẽ điểm/đường nhanh hơn
     }).setView([10.8231, 106.6297], 10);
 
+    // Sử dụng server mặc định của Leaflet (OpenStreetMap) - Load cực nhanh và ổn định
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        keepBuffer: 2
+    }).addTo(map);
+
     routeLayer = L.layerGroup().addTo(map);
-    addTileLayer(currentTileIndex);
 }
 
 function addTileLayer(index) {
