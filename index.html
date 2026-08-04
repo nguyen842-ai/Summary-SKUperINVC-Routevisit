@@ -191,12 +191,13 @@
 
 <script>
 // ==========================================
-// CẤU HÌNH SUPABASE & APPS SCRIPT (Khai báo DUY NHẤT 1 lần)
+// CẤU HÌNH SUPABASE & APPS SCRIPT
+// Đã thay đổi "const supabase" thành "var mySupabaseApp" để chống lỗi duplicate
 // ==========================================
-const SUPABASE_URL = 'https://mrqldgycwovpbmzdeuyz.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_itZfZBVw7bxE184tGh7x8A_0_r-QB5p';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx6QPUONb23T44O8i3n0oiTGvRE4FWRFJ2OaQclhZO4HQZDF7_y-6rQZsh0PFmhpvqM/exec";
+var SUPABASE_URL = 'https://mrqldgycwovpbmzdeuyz.supabase.co';
+var SUPABASE_ANON_KEY = 'sb_publishable_itZfZBVw7bxE184tGh7x8A_0_r-QB5p';
+var mySupabaseApp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+var GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx6QPUONb23T44O8i3n0oiTGvRE4FWRFJ2OaQclhZO4HQZDF7_y-6rQZsh0PFmhpvqM/exec";
 
 // ==========================================
 // ĐIỀU HƯỚNG TABS
@@ -207,7 +208,6 @@ function switchTab(tabId, btnElement) {
     document.getElementById(tabId).classList.add('active');
     btnElement.classList.add('active');
     
-    // Fix lỗi hiển thị Map khi tab bị ẩn
     if (tabId === 'tab-route' && map) {
         setTimeout(() => map.invalidateSize(), 100);
     }
@@ -220,14 +220,14 @@ let dbMaster = []; let dbSales = [];
 
 (async function loadSkuData() {
     try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await mySupabaseApp.auth.getSession();
         if (!session) { 
             document.getElementById('loader-text').innerHTML = '⚠️ Phiên đăng nhập hết hạn. Không thể tải dữ liệu.';
             return; 
         }
 
         let secureFiles = ['dataM5.js', 'dataM6.js', 'dataM7.js', 'kamMap.js'];
-        const { data: urls, error } = await supabase.storage.from('data').createSignedUrls(secureFiles, 60);
+        const { data: urls, error } = await mySupabaseApp.storage.from('data').createSignedUrls(secureFiles, 60);
         if (error || !urls) throw error;
 
         let loaded = 0;
@@ -241,7 +241,7 @@ let dbMaster = []; let dbSales = [];
             document.body.appendChild(script);
         });
     } catch (err) {
-        console.error("Chi tiết lỗi Supabase (Tab 1):", err); // In lỗi chi tiết ra DevTools Console
+        console.error("Chi tiết lỗi Supabase (Tab 1):", err); 
         document.getElementById('loader-text').innerHTML = '⚠️ Lỗi tải dữ liệu SKU (Xem chi tiết lỗi ở F12 > Console)';
     }
 })();
@@ -403,7 +403,7 @@ async function loadRouteData() {
     btn.disabled = true; sts.innerText = "⏳ Đang tải file Excel từ máy chủ..."; sts.style.color = "#ea580c";
 
     try {
-        const { data: signedUrls, error } = await supabase.storage.from('mappingdata').createSignedUrls(['map.xlsx', 'dh.xlsx'], 60);
+        const { data: signedUrls, error } = await mySupabaseApp.storage.from('mappingdata').createSignedUrls(['map.xlsx', 'dh.xlsx'], 60);
         if (error || !signedUrls) throw error;
 
         let urlMap = signedUrls.find(u => u.path === 'map.xlsx').signedUrl;
