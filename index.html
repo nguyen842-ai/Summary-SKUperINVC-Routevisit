@@ -438,23 +438,26 @@ async function loadRouteData() {
         let wbDH = XLSX.read(bDH, {type: 'array'});
         rawOrderData = XLSX.utils.sheet_to_json(wbDH.Sheets[wbDH.SheetNames[0]], {header: 1});
         
-        // Tìm cột PO & Sales (Quét 100 dòng và bổ sung từ khóa "chưa vat")
+      // 1. CHỐT CỨNG CỘT TỪ ĐẦU (Q = 16, AH = 33)
+        colOrderPO = 16; 
+        colOrderSales = 33; 
+
+        // 2. Vẫn chạy quét nhẹ phòng trường hợp sau này đổi form
         for (let i = 0; i < Math.min(100, rawOrderData.length); i++) {
             if(!rawOrderData[i]) continue;
             for (let j = 0; j < rawOrderData[i].length; j++) {
                 let val = String(rawOrderData[i][j] || '').toLowerCase().replace(/\s+/g, ' ').trim();
                 
-                // Cột Mã đơn hàng
-                if (val.includes('MÃ ĐƠN ĐẶT HÀNG') || val.includes('MÃ ĐƠN HÀNG') || val.includes('order') || val === 'po') {
+                if (val.includes('mã đơn đặt hàng') || val.includes('mã đơn hàng') || val.includes('mã đh')) {
                     colOrderPO = j;
                 }
-                
-                // Cột Doanh số (Thêm điều kiện chưa vat)
-                if (val.includes('thành tiền') || val.includes('doanh số') || val.includes('doanh thu') || val.includes('thanh tien') || val.includes('CHƯA VAT') || val.includes('chua vat')) {
+                if (val.includes('chưa vat') || val.includes('chua vat') || val.includes('thành tiền') || val.includes('doanh số')) {
                     colOrderSales = j;
                 }
             }
         }
+        
+        console.log("Hệ thống đã nhận diện - Cột PO:", colOrderPO, " | Cột Doanh số:", colOrderSales);
 
         // Đổ Data vào Select Box
         let areas = [...new Set(rawRouteData.map(r => r[COL.AREA]))].filter(Boolean);
