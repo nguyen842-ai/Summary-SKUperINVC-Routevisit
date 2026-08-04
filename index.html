@@ -191,10 +191,11 @@
 
 <script>
 // ==========================================
-// CẤU HÌNH SUPABASE & APPS SCRIPT
+// CẤU HÌNH SUPABASE & APPS SCRIPT (Khai báo DUY NHẤT 1 lần)
 // ==========================================
 const SUPABASE_URL = 'https://mrqldgycwovpbmzdeuyz.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_itZfZBVw7bxE184tGh7x8A_0_r-QB5p';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx6QPUONb23T44O8i3n0oiTGvRE4FWRFJ2OaQclhZO4HQZDF7_y-6rQZsh0PFmhpvqM/exec";
 
 // ==========================================
@@ -216,10 +217,14 @@ function switchTab(tabId, btnElement) {
 // PHẦN 1: LOGIC TAB 1 (SKU DASHBOARD)
 // =====================================================================
 let dbMaster = []; let dbSales = [];
+
 (async function loadSkuData() {
     try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) { alert("Phiên đăng nhập hết hạn."); return; }
+        if (!session) { 
+            document.getElementById('loader-text').innerHTML = '⚠️ Phiên đăng nhập hết hạn. Không thể tải dữ liệu.';
+            return; 
+        }
 
         let secureFiles = ['dataM5.js', 'dataM6.js', 'dataM7.js', 'kamMap.js'];
         const { data: urls, error } = await supabase.storage.from('data').createSignedUrls(secureFiles, 60);
@@ -236,7 +241,8 @@ let dbMaster = []; let dbSales = [];
             document.body.appendChild(script);
         });
     } catch (err) {
-        document.getElementById('loader-text').innerHTML = '⚠️ Lỗi tải dữ liệu SKU';
+        console.error("Chi tiết lỗi Supabase (Tab 1):", err); // In lỗi chi tiết ra DevTools Console
+        document.getElementById('loader-text').innerHTML = '⚠️ Lỗi tải dữ liệu SKU (Xem chi tiết lỗi ở F12 > Console)';
     }
 })();
 
@@ -378,7 +384,7 @@ function exportExcel() {
 // PHẦN 2: LOGIC TAB 2 (ROUTE MAP BÁO CÁO TUẦN)
 // =====================================================================
 
-// Map Setup
+// Khởi tạo Map
 const map = L.map('map').setView([10.8231, 106.6297], 10);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
 let routeLayer = L.layerGroup().addTo(map);
@@ -398,7 +404,7 @@ async function loadRouteData() {
 
     try {
         const { data: signedUrls, error } = await supabase.storage.from('mappingdata').createSignedUrls(['map.xlsx', 'dh.xlsx'], 60);
-        if (error || !signedUrls) throw new Error("Lỗi xác thực file Map");
+        if (error || !signedUrls) throw error;
 
         let urlMap = signedUrls.find(u => u.path === 'map.xlsx').signedUrl;
         let urlDH = signedUrls.find(u => u.path === 'dh.xlsx').signedUrl;
@@ -415,7 +421,7 @@ async function loadRouteData() {
         let wbDH = XLSX.read(bDH, {type: 'array'});
         rawOrderData = XLSX.utils.sheet_to_json(wbDH.Sheets[wbDH.SheetNames[0]], {header: 1});
         
-        // Tìm cột PO & Sales tự động
+        // Tìm cột PO & Sales
         for (let i = 0; i < Math.min(10, rawOrderData.length); i++) {
             if(!rawOrderData[i]) continue;
             for (let j = 0; j < rawOrderData[i].length; j++) {
@@ -433,7 +439,8 @@ async function loadRouteData() {
 
         sts.innerText = "✅ Tải dữ liệu thành công!"; sts.style.color = "#16a34a";
     } catch (err) {
-        sts.innerText = "❌ Lỗi tải dữ liệu"; sts.style.color = "#dc2626";
+        console.error("Chi tiết lỗi Supabase (Tab 2):", err);
+        sts.innerText = "❌ Lỗi tải dữ liệu. Kiểm tra quyền hoặc F12 Console."; sts.style.color = "#dc2626";
     } finally {
         btn.disabled = false;
     }
@@ -461,7 +468,7 @@ function updateRtNV() {
     document.getElementById('route-dashboard-wrapper').style.display = 'none';
 }
 
-// Tính Toán KPI & Vẽ Lên Giao Diện
+// Xử lý Dashboard Map
 function renderRouteDashboard() {
     let area = document.getElementById('rtArea').value; 
     let npp = document.getElementById('rtNPP').value; 
@@ -478,10 +485,8 @@ function renderRouteDashboard() {
     document.getElementById('ui-date-range').innerText = reportDate;
     document.getElementById('ui-timestamp').innerText = reportDate;
 
-    // Lọc data nhân viên
     let empData = rawRouteData.filter(r => r[COL.AREA]===area && r[COL.NPP]===npp && r[COL.NV]===nv);
     
-    // Xử lý Table & Map
     const tbody = document.getElementById('route-table-body'); tbody.innerHTML = "";
     const tfoot = document.getElementById('route-table-foot');
     routeLayer.clearLayers(); let allLatLngs = [];
@@ -492,7 +497,6 @@ function renderRouteDashboard() {
         let dData = empData.filter(r => r[COL.THU] === day);
         if (dData.length === 0) return;
 
-        // Sort by time
         dData.sort((a, b) => timeStrToMinutes(a[COL.TIME_IN]) - timeStrToMinutes(b[COL.TIME_IN]));
 
         let minIn = Infinity; let maxOut = -Infinity;
@@ -501,16 +505,13 @@ function renderRouteDashboard() {
         let dayLatLngs = []; let color = COLOR_MAP[day];
 
         dData.forEach((row, i) => {
-            // Checkin / out
             let tInStr = row[COL.TIME_IN]; let tOutStr = row[COL.TIME_OUT];
             let tIn = timeStrToMinutes(tInStr); let tOut = timeStrToMinutes(tOutStr);
             if (tIn > 0 && tIn < minIn) { minIn = tIn; cIn = tInStr; }
             if (tOut > 0 && tOut > maxOut) { maxOut = tOut; cOut = tOutStr; }
 
-            // Distances
             if (i < dData.length - 1) dayDist += getHaversine14(row[COL.LAT], row[COL.LNG], dData[i+1][COL.LAT], dData[i+1][COL.LNG]);
 
-            // Orders & Sales
             let dsStr = String(row[COL.DS_DON_HANG] || '').toUpperCase().trim();
             if (dsStr.includes('PO') && colOrderPO !== -1 && colOrderSales !== -1) {
                 dayOrders++;
@@ -524,7 +525,6 @@ function renderRouteDashboard() {
                 });
             }
 
-            // Map Markers
             let lat = parseFloat(row[COL.LAT]); let lng = parseFloat(row[COL.LNG]); 
             if (!isNaN(lat) && !isNaN(lng)) {
                 let ll = [lat, lng]; dayLatLngs.push(ll); allLatLngs.push(ll);
@@ -539,7 +539,6 @@ function renderRouteDashboard() {
             }
         });
 
-        // Polylines
         if (dayLatLngs.length > 1) L.polyline(dayLatLngs, {color: color, weight: 3, opacity: 0.7, dashArray: '5,5'}).addTo(routeLayer);
 
         totalVisit += dData.length; totalOrder += dayOrders; 
@@ -563,14 +562,14 @@ function renderRouteDashboard() {
 
     if (allLatLngs.length > 0) map.fitBounds(L.latLngBounds(allLatLngs), {padding: [30, 30]});
 
-    // Gọi Apps Script lấy cảnh báo
+    // Gọi API lấy cảnh báo
     fetchWarningsGAS(nv);
 }
 
-// Fetch Data Cảnh Báo
+// Gọi Apps Script lấy cảnh báo
 async function fetchWarningsGAS(rawName) {
     const wc = document.getElementById('warnings-list');
-    wc.innerHTML = '<i>Đang truy xuất cảnh báo từ hệ thống...</i>';
+    wc.innerHTML = '<i>Đang truy xuất nhận xét từ hệ thống...</i>';
     let clean = String(rawName).replace(/^(KAE|DSR)\s+/i, '').trim().toUpperCase();
     try {
         let res = await fetch(`${GAS_WEB_APP_URL}?kaeName=${encodeURIComponent(clean)}`);
@@ -586,14 +585,14 @@ async function fetchWarningsGAS(rawName) {
                     </svg><span>${cmt}</span></div>`);
             });
         } else {
-            wc.innerHTML = '<span style="color:#64748b; font-style: normal;">(Không có cảnh báo nào cho nhân viên này)</span>';
+            wc.innerHTML = '<span style="color:#64748b; font-style: normal; font-size: 13px;">(Không có cảnh báo nào cho nhân viên này)</span>';
         }
     } catch (err) {
-        wc.innerHTML = '<span style="color:#b91c1c;">(Lỗi kết nối tới App Script)</span>';
+        wc.innerHTML = '<span style="color:#b91c1c; font-size: 13px;">(Lỗi kết nối tới App Script)</span>';
     }
 }
 
-// Utilities Helpers
+// Hàm tính toán phụ trợ
 function timeStrToMinutes(ts) {
     if (!ts) return 0; let p = ts.toString().trim().split(':');
     return (parseInt(p[0])||0)*60 + (parseInt(p[1])||0) + (parseInt(p[2])||0)/60;
