@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MEETING AUG.2026 (SKU & Route Map) </title>
+    <title>Dashboard Tổng Hợp (SKU & Route Map)</title>
     
-    <!-- Thư viện Supabase, SheetJS & Leaflet -->
+    <!-- Thư viện Supabase, SheetJS, Leaflet & Html2Canvas -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <style>
         body { 
@@ -51,13 +52,22 @@
         .btn-primary:hover { background-color: #2563eb; }
         .btn-primary:disabled { background-color: #94a3b8; cursor: not-allowed; }
         
-        .header-bar { background-color: #002060; color: white; padding: 12px 20px; font-size: 18px; font-weight: bold; text-transform: uppercase; margin-bottom: 15px;}
+        /* Cấu hình khung 16:9 chuẩn PPT */
+        #ppt-wrapper { width: 100%; overflow-x: auto; background: #e2e8f0; padding: 20px 0; border-radius: 8px; }
+        #ppt-export-area {
+            width: 1280px; height: 720px; /* Chuẩn 720p HD 16:9 */
+            background-color: #ffffff; margin: 0 auto; padding: 20px;
+            box-sizing: border-box; display: flex; flex-direction: column;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .header-bar { background-color: #002060; color: white; padding: 12px 20px; font-size: 18px; font-weight: bold; text-transform: uppercase; flex-shrink: 0; margin-bottom: 15px; }
         .header-bar span.kae-name { color: #92D050; }
         
-        .route-main-container { display: flex; gap: 20px; align-items: flex-start; }
+        .route-main-container { flex: 1; display: flex; gap: 20px; align-items: flex-start; min-height: 0; margin-bottom: 10px; }
         
         /* Bản đồ */
-        #map-container { flex: 1; height: 500px; border: 1px solid #cbd5e1; background: #e2e8f0; position: relative; min-width: 400px; }
+        #map-container { flex: 1; height: 100%; border: 1px solid #cbd5e1; background: #e2e8f0; position: relative; }
         #map { width: 100%; height: 100%; z-index: 1;}
         .route-marker {
             border-radius: 50%; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center;
@@ -65,26 +75,26 @@
         }
 
         /* Bảng báo cáo Route */
-        #report-container { flex: 1.2; display: flex; flex-direction: column; }
-        .report-title-section { text-align: center; margin-bottom: 15px; border-bottom: 2px solid #3b82f6; padding-bottom: 15px; }
-        .report-title-section h2 { margin: 0; color: #002060; font-size: 22px; text-transform: uppercase; }
+        #report-container { flex: 1.2; display: flex; flex-direction: column; height: 100%; }
+        .report-title-section { text-align: center; margin-bottom: 15px; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; flex-shrink: 0; }
+        .report-title-section h2 { margin: 0; color: #002060; font-size: 20px; text-transform: uppercase; }
         .report-title-section p { margin: 5px 0 0 0; font-size: 13px; color: #333; }
         
-        .route-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .route-table th, .route-table td { border: 1px solid #cbd5e1; padding: 8px 5px; text-align: center; vertical-align: middle; }
+        .route-table { width: 100%; border-collapse: collapse; font-size: 13px; flex: 1; }
+        .route-table th, .route-table td { border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; vertical-align: middle; }
         .route-table thead th { background-color: #f8fafc; color: #1e293b; font-weight: bold; }
-        .route-table tbody tr td:first-child { font-weight: bold; }
         .route-total-row td { background-color: #e2e8f0; font-weight: bold; font-size: 14px; }
         .col-blue { color: #2563eb; font-weight: bold; }
         .col-orange { color: #d97706; font-weight: bold; }
         .col-green { color: #15803d; font-weight: bold; }
         .col-navy { color: #002060; font-weight: bold; }
         
-        .timestamp { text-align: right; font-size: 11px; color: #64748b; font-style: italic; margin-top: 10px; }
+        .timestamp { text-align: right; font-size: 11px; color: #64748b; font-style: italic; margin-top: 10px; flex-shrink: 0; }
         
-        .warnings-section { padding: 15px 0; }
-        .warning-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: #b91c1c; font-weight: bold; font-size: 14px; font-style: italic; }
-        .warning-icon { width: 24px; height: 24px; flex-shrink: 0; }
+        /* Cảnh báo nằm ở đáy khung PPT */
+        .warnings-section { flex-shrink: 0; padding-top: 10px; border-top: 2px dashed #cbd5e1; min-height: 60px; overflow: hidden; }
+        .warning-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: #b91c1c; font-weight: bold; font-size: 13px; font-style: italic; }
+        .warning-icon { width: 20px; height: 20px; flex-shrink: 0; }
     </style>
 </head>
 <body>
@@ -149,39 +159,45 @@
         <div class="filter-group"><label>Khu vực:</label><select id="rtArea" disabled onchange="updateRtNPP()"><option value="">-- Chọn --</option></select></div>
         <div class="filter-group"><label>NPP:</label><select id="rtNPP" disabled onchange="updateRtNV()"><option value="">-- Chọn --</option></select></div>
         <div class="filter-group"><label>Nhân viên:</label><select id="rtNV" disabled onchange="renderRouteDashboard()"><option value="">-- Chọn --</option></select></div>
+        
+        <!-- NÚT TẢI ẢNH PPT -->
+        <button id="btn-download-ppt" class="btn-primary" style="background-color: #8b5cf6; margin-left: auto;" onclick="downloadReportPPT()" disabled>📸 Tải Ảnh PPT</button>
     </div>
 
+    <!-- WRAPPER CUỘN NGANG KHI MÀN HÌNH NHỎ -->
     <div id="route-dashboard-wrapper" style="display: none;">
-        <!-- Header Xanh Đậm -->
-        <div class="header-bar">
-            SUMMARY ROUTE MAP OF <span class="kae-name" id="ui-kae-name"></span> <span class="time-range" id="ui-date-range"></span>
-        </div>
-
-        <div class="route-main-container">
-            <!-- Bản đồ -->
-            <div id="map-container"><div id="map"></div></div>
-
-            <!-- Bảng báo cáo -->
-            <div id="report-container">
-                <div class="report-title-section">
-                    <h2>BÁO CÁO TỔNG HỢP TUẦN</h2>
-                    <p>Khu vực: <b id="ui-area"></b> | NPP: <b id="ui-npp"></b> | Nhân viên: <b id="ui-staff"></b></p>
+        <div id="ppt-wrapper">
+            <!-- KHUNG 16:9 CHUẨN PPT ĐỂ CHỤP ẢNH -->
+            <div id="ppt-export-area">
+                <div class="header-bar">
+                    SUMMARY ROUTE MAP OF <span class="kae-name" id="ui-kae-name"></span> <span class="time-range" id="ui-date-range"></span>
                 </div>
 
-                <table class="route-table">
-                    <thead>
-                        <tr>
-                            <th>Ngày làm việc</th><th>Giờ Check-in</th><th>Giờ Check-out</th>
-                            <th>Số KH<br>viếng thăm</th><th>Số KH<br>lên đơn</th>
-                            <th>Tổng Doanh số</th><th>Quãng đường</th>
-                        </tr>
-                    </thead>
-                    <tbody id="route-table-body"></tbody>
-                    <tfoot id="route-table-foot"></tfoot>
-                </table>
-                
-                <div class="timestamp">Thời gian dữ liệu: <span id="ui-timestamp"></span></div>
-                
+                <div class="route-main-container">
+                    <div id="map-container"><div id="map"></div></div>
+
+                    <div id="report-container">
+                        <div class="report-title-section">
+                            <h2>BÁO CÁO TỔNG HỢP TUẦN</h2>
+                            <p>Khu vực: <b id="ui-area"></b> | NPP: <b id="ui-npp"></b> | Nhân viên: <b id="ui-staff"></b></p>
+                        </div>
+
+                        <table class="route-table">
+                            <thead>
+                                <tr>
+                                    <th>Ngày làm việc</th><th>Giờ Check-in</th><th>Giờ Check-out</th>
+                                    <th>Số KH<br>viếng thăm</th><th>Số KH<br>lên đơn</th>
+                                    <th>Tổng Doanh số</th><th>Quãng đường</th>
+                                </tr>
+                            </thead>
+                            <tbody id="route-table-body"></tbody>
+                            <tfoot id="route-table-foot"></tfoot>
+                        </table>
+                        
+                        <div class="timestamp">Thời gian dữ liệu: <span id="ui-timestamp"></span></div>
+                    </div>
+                </div>
+
                 <!-- Cảnh báo Apps Script -->
                 <div class="warnings-section" id="warnings-list"></div>
             </div>
@@ -192,7 +208,6 @@
 <script>
 // ==========================================
 // CẤU HÌNH SUPABASE & APPS SCRIPT
-// Đã thay đổi "const supabase" thành "var mySupabaseApp" để chống lỗi duplicate
 // ==========================================
 var SUPABASE_URL = 'https://mrqldgycwovpbmzdeuyz.supabase.co';
 var SUPABASE_ANON_KEY = 'sb_publishable_itZfZBVw7bxE184tGh7x8A_0_r-QB5p';
@@ -226,40 +241,26 @@ let dbMaster = []; let dbSales = [];
             return; 
         }
 
-        // 1. CHỈ xin link Supabase cho 3 file data
         let secureFiles = ['dataM5.js', 'dataM6.js', 'dataM7.js'];
         const { data: urls, error } = await mySupabaseApp.storage.from('data').createSignedUrls(secureFiles, 60);
         if (error || !urls) throw error;
 
-        // 2. Lấy các link Supabase hợp lệ
         let validUrls = urls.filter(u => u.signedUrl).map(u => u.signedUrl);
-        
-        // 3. Nối thêm file kamMap.js từ nguồn Local (kèm tham số chống cache)
         validUrls.push('kamMap.js?t=' + new Date().getTime());
 
-        if (validUrls.length === 0) {
-            initSkuLogic();
-            return;
-        }
+        if (validUrls.length === 0) { initSkuLogic(); return; }
 
         let loaded = 0;
         validUrls.forEach(srcUrl => {
             let script = document.createElement('script');
             script.src = srcUrl;
-            script.onload = () => {
-                loaded++;
-                if (loaded === validUrls.length) initSkuLogic();
-            };
-            script.onerror = () => {
-                console.warn("Lỗi khi tải file:", srcUrl);
-                loaded++;
-                if (loaded === validUrls.length) initSkuLogic();
-            }
+            script.onload = () => { loaded++; if (loaded === validUrls.length) initSkuLogic(); };
+            script.onerror = () => { console.warn("Lỗi tải:", srcUrl); loaded++; if (loaded === validUrls.length) initSkuLogic(); }
             document.body.appendChild(script);
         });
     } catch (err) {
-        console.error("Chi tiết lỗi Supabase (Tab 1):", err); 
-        document.getElementById('loader-text').innerHTML = '⚠️ Lỗi tải dữ liệu SKU (Xem chi tiết lỗi ở F12 > Console)';
+        console.error("Lỗi Tab 1:", err); 
+        document.getElementById('loader-text').innerHTML = '⚠️ Lỗi tải dữ liệu SKU';
     }
 })();
 
@@ -401,7 +402,6 @@ function exportExcel() {
 // PHẦN 2: LOGIC TAB 2 (ROUTE MAP BÁO CÁO TUẦN)
 // =====================================================================
 
-// Khởi tạo Map
 const map = L.map('map').setView([10.8231, 106.6297], 10);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
 let routeLayer = L.layerGroup().addTo(map);
@@ -426,40 +426,27 @@ async function loadRouteData() {
         let urlMap = signedUrls.find(u => u.path === 'map.xlsx').signedUrl;
         let urlDH = signedUrls.find(u => u.path === 'dh.xlsx').signedUrl;
 
-        // Tải Map
         let rMap = await fetch(urlMap); let bMap = await rMap.arrayBuffer();
         let wbMap = XLSX.read(bMap, {type: 'array'});
         let jsonRoute = XLSX.utils.sheet_to_json(wbMap.Sheets[wbMap.SheetNames[0]], {header: 1});
         if (jsonRoute.length > 1 && jsonRoute[1][4]) globalDateRange = jsonRoute[1][4];
         rawRouteData = jsonRoute.filter(r => r[COL.AREA] && r[COL.NPP] && r[COL.NV] && !isNaN(parseInt(r[0])));
 
-        // Tải Order
         let rDH = await fetch(urlDH); let bDH = await rDH.arrayBuffer();
         let wbDH = XLSX.read(bDH, {type: 'array'});
         rawOrderData = XLSX.utils.sheet_to_json(wbDH.Sheets[wbDH.SheetNames[0]], {header: 1});
         
-      // 1. CHỐT CỨNG CỘT TỪ ĐẦU (Q = 16, AH = 33)
-        colOrderPO = 16; 
-        colOrderSales = 33; 
-
-        // 2. Vẫn chạy quét nhẹ phòng trường hợp sau này đổi form
+        // Cố định cột PO (16) và Doanh số (33)
+        colOrderPO = 16; colOrderSales = 33; 
         for (let i = 0; i < Math.min(100, rawOrderData.length); i++) {
             if(!rawOrderData[i]) continue;
             for (let j = 0; j < rawOrderData[i].length; j++) {
                 let val = String(rawOrderData[i][j] || '').toLowerCase().replace(/\s+/g, ' ').trim();
-                
-                if (val.includes('mã đơn đặt hàng') || val.includes('mã đơn hàng') || val.includes('mã đh')) {
-                    colOrderPO = j;
-                }
-                if (val.includes('chưa vat') || val.includes('chua vat') || val.includes('thành tiền') || val.includes('doanh số')) {
-                    colOrderSales = j;
-                }
+                if (val.includes('mã đơn đặt hàng') || val.includes('mã đơn hàng') || val.includes('mã đh')) colOrderPO = j;
+                if (val.includes('chưa vat') || val.includes('chua vat') || val.includes('thành tiền') || val.includes('doanh số')) colOrderSales = j;
             }
         }
-        
-        console.log("Hệ thống đã nhận diện - Cột PO:", colOrderPO, " | Cột Doanh số:", colOrderSales);
 
-        // Đổ Data vào Select Box
         let areas = [...new Set(rawRouteData.map(r => r[COL.AREA]))].filter(Boolean);
         let selA = document.getElementById('rtArea'); selA.innerHTML = '<option value="">-- Chọn Area --</option>';
         areas.forEach(a => selA.add(new Option(a, a)));
@@ -467,7 +454,6 @@ async function loadRouteData() {
 
         sts.innerText = "✅ Tải dữ liệu thành công!"; sts.style.color = "#16a34a";
     } catch (err) {
-        console.error("Chi tiết lỗi Supabase (Tab 2):", err);
         sts.innerText = "❌ Lỗi tải dữ liệu. Kiểm tra quyền hoặc F12 Console."; sts.style.color = "#dc2626";
     } finally {
         btn.disabled = false;
@@ -483,6 +469,7 @@ function updateRtNPP() {
     npps.forEach(n => selN.add(new Option(n, n)));
     selN.disabled = false; document.getElementById('rtNV').disabled = true;
     document.getElementById('route-dashboard-wrapper').style.display = 'none';
+    document.getElementById('btn-download-ppt').disabled = true;
 }
 
 function updateRtNV() {
@@ -494,16 +481,22 @@ function updateRtNV() {
     nvs.forEach(nv => selV.add(new Option(nv, nv)));
     selV.disabled = false;
     document.getElementById('route-dashboard-wrapper').style.display = 'none';
+    document.getElementById('btn-download-ppt').disabled = true;
 }
 
-// Xử lý Dashboard Map
 function renderRouteDashboard() {
     let area = document.getElementById('rtArea').value; 
     let npp = document.getElementById('rtNPP').value; 
     let nv = document.getElementById('rtNV').value;
-    if(!nv) { document.getElementById('route-dashboard-wrapper').style.display = 'none'; return; }
+    if(!nv) { 
+        document.getElementById('route-dashboard-wrapper').style.display = 'none'; 
+        document.getElementById('btn-download-ppt').disabled = true;
+        return; 
+    }
 
     document.getElementById('route-dashboard-wrapper').style.display = 'block';
+    document.getElementById('btn-download-ppt').disabled = false; // Mở khóa nút Tải Ảnh
+
     document.getElementById('ui-kae-name').innerText = String(nv).toUpperCase();
     document.getElementById('ui-staff').innerText = nv;
     document.getElementById('ui-area').innerText = area;
@@ -572,8 +565,10 @@ function renderRouteDashboard() {
         totalVisit += dData.length; totalOrder += dayOrders; 
         totalSales += daySales; totalDist += dayDist;
 
+        // Bổ sung màu sắc cho chữ Thứ 2 -> Thứ 7 để khớp màu bản đồ
         let tr = `<tr>
-            <td>${day}</td><td>${cIn}</td><td>${cOut}</td>
+            <td style="color: ${color}; font-weight: bold;">${day}</td>
+            <td>${cIn}</td><td>${cOut}</td>
             <td class="col-blue">${dData.length}</td><td class="col-orange">${dayOrders}</td>
             <td class="col-green">${new Intl.NumberFormat('en-US').format(daySales)}</td>
             <td>${dayDist.toFixed(2)} km</td>
@@ -588,13 +583,43 @@ function renderRouteDashboard() {
         <td class="col-navy">${totalDist.toFixed(2)} km</td>
     </tr>`;
 
-    if (allLatLngs.length > 0) map.fitBounds(L.latLngBounds(allLatLngs), {padding: [30, 30]});
+    if (allLatLngs.length > 0) {
+        setTimeout(() => map.fitBounds(L.latLngBounds(allLatLngs), {padding: [30, 30]}), 300);
+    }
 
-    // Gọi API lấy cảnh báo
     fetchWarningsGAS(nv);
 }
 
-// Gọi Apps Script lấy cảnh báo
+// Xử lý tạo ảnh Tải về PowerPoint
+async function downloadReportPPT() {
+    const btn = document.getElementById('btn-download-ppt');
+    const originalText = btn.innerText;
+    btn.innerText = "⌛ Đang tạo ảnh...";
+    btn.disabled = true;
+
+    try {
+        const element = document.getElementById('ppt-export-area');
+        // Gọi html2canvas chụp phần tử có kích thước 16:9
+        const canvas = await html2canvas(element, { 
+            scale: 2,           // Tăng độ nét ảnh
+            useCORS: true,      // Cho phép tải ảnh bản đồ từ domain khác
+            allowTaint: false
+        });
+        
+        const link = document.createElement('a');
+        const nv = document.getElementById('ui-staff').innerText || "BaoCao";
+        link.download = `RouteMap_PPT_${nv.replace(/\s+/g, '_')}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    } catch (error) {
+        console.error("Lỗi khi tạo ảnh PPT:", error);
+        alert("Có lỗi xảy ra khi tạo ảnh báo cáo! Vui lòng thử lại.");
+    } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
+}
+
 async function fetchWarningsGAS(rawName) {
     const wc = document.getElementById('warnings-list');
     wc.innerHTML = '<i>Đang truy xuất nhận xét từ hệ thống...</i>';
@@ -620,7 +645,6 @@ async function fetchWarningsGAS(rawName) {
     }
 }
 
-// Hàm tính toán phụ trợ
 function timeStrToMinutes(ts) {
     if (!ts) return 0; let p = ts.toString().trim().split(':');
     return (parseInt(p[0])||0)*60 + (parseInt(p[1])||0) + (parseInt(p[2])||0)/60;
@@ -632,7 +656,6 @@ function getHaversine14(lat1, lon1, lat2, lon2) {
     const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
     return (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))) * 1.4;
 }
-
 </script>
 </body>
 </html>
