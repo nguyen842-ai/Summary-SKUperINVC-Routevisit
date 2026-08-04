@@ -206,15 +206,15 @@
 var SUPABASE_URL = 'https://mrqldgycwovpbmzdeuyz.supabase.co';
 var SUPABASE_ANON_KEY = 'sb_publishable_itZfZBVw7bxE184tGh7x8A_0_r-QB5p';
 var mySupabaseApp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-var GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx6QPUONb23T44O8i3n0oiTGvRE4FWRFJ2OaQclhZO4HQZDF7_y-6rQZsh0PFmhpvqM/exec";
+var GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz95Ef0J6INUxifTh4-NNNiXBrXYszhZPf7hcwgthdBGxqfSujfwy5oFQCdn6lwbXEY/exec";
 
-// Khởi tạo Map toàn cục (Giống hệt bản gốc load siêu nhanh)
+// Khởi tạo Map toàn cục (Bật preferCanvas để render line chuẩn HTML2Canvas)
 const map = L.map('map', { preferCanvas: true }).setView([10.8231, 106.6297], 10);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
 let routeLayer = L.layerGroup().addTo(map);
 
 // ==========================================
-// ĐIỀU HƯỚNG TABS (CÓ XỬ LÝ LỖI MAP)
+// ĐIỀU HƯỚNG TABS
 // ==========================================
 function switchTab(tabId, btnElement) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -405,6 +405,7 @@ function exportExcel() {
 let rawRouteData = []; let rawOrderData = []; 
 let colOrderPO = -1, colOrderSales = -1;
 let globalDateRange = "";
+let globalWarningsData = null; // Kho chứa toàn bộ comment tải từ Google
 
 const COL = { NPP: 2, NV: 6, THU: 11, STT_GHE: 12, LO_TRINH: 13, MA_KH: 14, TEN_KH: 15, TIME_IN: 19, TIME_OUT: 20, TIME_TOTAL: 21, DS_DON_HANG: 22, LAT: 30, LNG: 31, AREA: 37 };
 const DAYS_ORDER = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
@@ -413,7 +414,7 @@ const COLOR_MAP = { 'Thứ 2': '#22c55e', 'Thứ 3': '#ef4444', 'Thứ 4': '#a85
 async function loadRouteData() {
     const btn = document.getElementById('btnLoadRouteData');
     const sts = document.getElementById('route-status');
-    btn.disabled = true; sts.innerText = "⏳ Đang tải file Excel từ máy chủ..."; sts.style.color = "#ea580c";
+    btn.disabled = true; sts.innerText = "⏳ Đang tải dữ liệu..."; sts.style.color = "#ea580c";
 
     try {
         const { data: signedUrls, error } = await mySupabaseApp.storage.from('mappingdata').createSignedUrls(['map.xlsx', 'dh.xlsx'], 60);
@@ -422,7 +423,13 @@ async function loadRouteData() {
         let urlMap = signedUrls.find(u => u.path === 'map.xlsx').signedUrl;
         let urlDH = signedUrls.find(u => u.path === 'dh.xlsx').signedUrl;
 
-        let [rMap, rDH] = await Promise.all([fetch(urlMap), fetch(urlDH)]);
+        // TẢI SONG SONG: Excel Map, Excel Order VÀ Dữ liệu App Script
+        let [rMap, rDH, rWarn] = await Promise.all([
+            fetch(urlMap), 
+            fetch(urlDH),
+            fetch(GAS_WEB_APP_URL).catch(e => null) // Bỏ qua lỗi nếu mạng chặn để không sập web
+        ]);
+
         let [bMap, bDH] = await Promise.all([rMap.arrayBuffer(), rDH.arrayBuffer()]);
 
         let wbMap = XLSX.read(bMap, {type: 'array'});
@@ -441,6 +448,16 @@ async function loadRouteData() {
                 if (val.includes('mã đơn đặt hàng') || val.includes('mã đơn hàng') || val.includes('mã đh')) colOrderPO = j;
                 if (val.includes('chưa vat') || val.includes('chua vat') || val.includes('thành tiền') || val.includes('doanh số')) colOrderSales = j;
             }
+        }
+
+        // Xử lý Cảnh báo từ Google
+        if (rWarn) {
+            try {
+                let warnData = await rWarn.json();
+                if (warnData.status === "success") {
+                    globalWarningsData = warnData.data; // Lưu trọn bộ vào kho
+                }
+            } catch(e) { console.error("Lỗi phân tích JSON cảnh báo:", e); }
         }
 
         let areas = [...new Set(rawRouteData.map(r => r[COL.AREA]))].filter(Boolean);
@@ -493,7 +510,6 @@ function renderRouteDashboard() {
     document.getElementById('route-dashboard-wrapper').style.display = 'block';
     document.getElementById('btn-download-ppt').disabled = false; 
 
-    // Đảm bảo map tính lại kích thước (do tab chuyển đổi)
     setTimeout(() => { map.invalidateSize(); }, 100);
 
     document.getElementById('ui-kae-name').innerText = String(nv).toUpperCase();
@@ -585,10 +601,37 @@ function renderRouteDashboard() {
         setTimeout(() => map.fitBounds(L.latLngBounds(allLatLngs), {padding: [30, 30]}), 300);
     }
 
-    fetchWarningsGAS(nv);
+    displayWarnings(nv);
 }
 
-// Xử lý tạo ảnh Tải về PowerPoint
+// Hàm lấy Cảnh báo từ bộ nhớ thay vì gọi App Script liên tục
+function displayWarnings(rawName) {
+    const wc = document.getElementById('warnings-list');
+    let clean = String(rawName).replace(/^(KAE|DSR)\s+/i, '').trim().toUpperCase();
+
+    wc.innerHTML = ''; 
+
+    if (!globalWarningsData) {
+        wc.innerHTML = '<span style="color:#d97706; font-size: 13px;">(Không thể tải dữ liệu cảnh báo từ hệ thống)</span>';
+        return;
+    }
+
+    let comments = globalWarningsData[clean] || [];
+    
+    if (comments.length > 0) {
+        comments.forEach(cmt => {
+            wc.insertAdjacentHTML('beforeend', `<div class="warning-item">
+                <svg class="warning-icon" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2L2 22H22L12 2Z" fill="#b91c1c" stroke="#b91c1c" stroke-width="2" stroke-linejoin="round"/>
+                    <path d="M12 9V15" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M12 19H12.01" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                </svg><span>${cmt}</span></div>`);
+        });
+    } else {
+        wc.innerHTML = '<span style="color:#64748b; font-style: normal; font-size: 13px;">(Không có cảnh báo nào cho nhân viên này)</span>';
+    }
+}
+
 async function downloadReportPPT() {
     const btn = document.getElementById('btn-download-ppt');
     const originalText = btn.innerText;
@@ -614,31 +657,6 @@ async function downloadReportPPT() {
     } finally {
         btn.innerText = originalText;
         btn.disabled = false;
-    }
-}
-
-async function fetchWarningsGAS(rawName) {
-    const wc = document.getElementById('warnings-list');
-    wc.innerHTML = '<i>Đang truy xuất nhận xét từ hệ thống...</i>';
-    let clean = String(rawName).replace(/^(KAE|DSR)\s+/i, '').trim().toUpperCase();
-    try {
-        let res = await fetch(`${GAS_WEB_APP_URL}?kaeName=${encodeURIComponent(clean)}`);
-        let data = await res.json();
-        wc.innerHTML = '';
-        if (data.status === "success" && data.comments && data.comments.length > 0) {
-            data.comments.forEach(cmt => {
-                wc.insertAdjacentHTML('beforeend', `<div class="warning-item">
-                    <svg class="warning-icon" viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2L2 22H22L12 2Z" fill="#b91c1c" stroke="#b91c1c" stroke-width="2" stroke-linejoin="round"/>
-                        <path d="M12 9V15" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M12 19H12.01" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                    </svg><span>${cmt}</span></div>`);
-            });
-        } else {
-            wc.innerHTML = '<span style="color:#64748b; font-style: normal; font-size: 13px;">(Không có cảnh báo nào cho nhân viên này)</span>';
-        }
-    } catch (err) {
-        wc.innerHTML = '<span style="color:#b91c1c; font-size: 13px;">(Lỗi kết nối tới App Script)</span>';
     }
 }
 
