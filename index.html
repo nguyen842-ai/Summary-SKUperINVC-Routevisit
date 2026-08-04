@@ -95,10 +95,6 @@
         .warnings-section { flex-shrink: 0; padding-top: 10px; border-top: 2px dashed #cbd5e1; min-height: 60px; overflow: hidden; }
         .warning-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: #b91c1c; font-weight: bold; font-size: 13px; font-style: italic; }
         .warning-icon { width: 20px; height: 20px; flex-shrink: 0; }
-
-        /* Trạng thái loading nhỏ cho bản đồ / cảnh báo */
-        .map-loading-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 12px; color: #64748b; z-index: 0; }
-        .retry-link { color: #2563eb; text-decoration: underline; cursor: pointer; font-style: normal; }
     </style>
 </head>
 <body>
@@ -154,8 +150,6 @@
 <!-- TAB 2: ROUTE MAP BÁO CÁO TUẦN              -->
 <!-- ========================================== -->
 <div id="tab-route" class="tab-content">
-    
-    <!-- Thanh công cụ Route Map -->
     <div class="controls-bar">
         <button id="btnLoadRouteData" class="btn-primary" onclick="loadRouteData()">📥 Tải Dữ Liệu Excel Map</button>
         <span id="route-status" style="font-size: 13px; font-style: italic; color: #64748b; margin-right: 15px;">(Chưa tải dữ liệu)</span>
@@ -164,14 +158,11 @@
         <div class="filter-group"><label>NPP:</label><select id="rtNPP" disabled onchange="updateRtNV()"><option value="">-- Chọn --</option></select></div>
         <div class="filter-group"><label>Nhân viên:</label><select id="rtNV" disabled onchange="renderRouteDashboard()"><option value="">-- Chọn --</option></select></div>
         
-        <!-- NÚT TẢI ẢNH PPT -->
         <button id="btn-download-ppt" class="btn-primary" style="background-color: #8b5cf6; margin-left: auto;" onclick="downloadReportPPT()" disabled>📸 Tải Ảnh PPT</button>
     </div>
 
-    <!-- WRAPPER CUỘN NGANG KHI MÀN HÌNH NHỎ -->
     <div id="route-dashboard-wrapper" style="display: none;">
         <div id="ppt-wrapper">
-            <!-- KHUNG 16:9 CHUẨN PPT ĐỂ CHỤP ẢNH -->
             <div id="ppt-export-area">
                 <div class="header-bar">
                     SUMMARY ROUTE MAP OF <span class="kae-name" id="ui-kae-name"></span> <span class="time-range" id="ui-date-range"></span>
@@ -202,7 +193,6 @@
                     </div>
                 </div>
 
-                <!-- Cảnh báo Apps Script -->
                 <div class="warnings-section" id="warnings-list"></div>
             </div>
         </div>
@@ -218,8 +208,13 @@ var SUPABASE_ANON_KEY = 'sb_publishable_itZfZBVw7bxE184tGh7x8A_0_r-QB5p';
 var mySupabaseApp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 var GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx6QPUONb23T44O8i3n0oiTGvRE4FWRFJ2OaQclhZO4HQZDF7_y-6rQZsh0PFmhpvqM/exec";
 
+// Khởi tạo Map toàn cục (Giống hệt bản gốc load siêu nhanh)
+const map = L.map('map').setView([10.8231, 106.6297], 10);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
+let routeLayer = L.layerGroup().addTo(map);
+
 // ==========================================
-// ĐIỀU HƯỚNG TABS
+// ĐIỀU HƯỚNG TABS (CÓ XỬ LÝ LỖI MAP)
 // ==========================================
 function switchTab(tabId, btnElement) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -227,9 +222,9 @@ function switchTab(tabId, btnElement) {
     document.getElementById(tabId).classList.add('active');
     btnElement.classList.add('active');
     
+    // Bắt buộc gọi invalidateSize khi mở lại tab có chứa Leaflet
     if (tabId === 'tab-route') {
-        ensureMapInitialized();
-        setTimeout(() => { if (map) map.invalidateSize(); }, 100);
+        setTimeout(() => { map.invalidateSize(); }, 200);
     }
 }
 
@@ -255,16 +250,12 @@ let dbMaster = []; let dbSales = [];
 
         if (validUrls.length === 0) { initSkuLogic(); return; }
 
-        // Tải song song thay vì tuần tự để rút ngắn thời gian chờ
-        let loaded = 0;
-        let total = validUrls.length;
+        let loaded = 0; let total = validUrls.length;
         let done = () => { loaded++; if (loaded === total) initSkuLogic(); };
         validUrls.forEach(srcUrl => {
             let script = document.createElement('script');
-            script.src = srcUrl;
-            script.async = true;
-            script.onload = done;
-            script.onerror = () => { console.warn("Lỗi tải:", srcUrl); done(); };
+            script.src = srcUrl; script.async = true;
+            script.onload = done; script.onerror = () => { console.warn("Lỗi tải:", srcUrl); done(); };
             document.body.appendChild(script);
         });
     } catch (err) {
@@ -406,54 +397,10 @@ function exportExcel() {
     XLSX.writeFile(wb, "Tracking_SKU_Invoice.xlsx");
 }
 
+
 // =====================================================================
 // PHẦN 2: LOGIC TAB 2 (ROUTE MAP BÁO CÁO TUẦN)
 // =====================================================================
-
-let map = null;               
-let routeLayer = null;
-
-function ensureMapInitialized() {
-    if (map) return; // Nếu đã khởi tạo rồi thì bỏ qua
-
-    map = L.map('map', {
-        preferCanvas: true, // Giúp vẽ điểm/đường nhanh hơn
-    }).setView([10.8231, 106.6297], 10);
-
-    // Sử dụng server mặc định của Leaflet (OpenStreetMap) - Load cực nhanh và ổn định
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        keepBuffer: 2
-    }).addTo(map);
-
-    routeLayer = L.layerGroup().addTo(map);
-}
-
-function addTileLayer(index) {
-    const provider = TILE_PROVIDERS[index];
-    currentTileLayer = L.tileLayer(provider.url, {
-        subdomains: provider.subdomains,
-        crossOrigin: true,
-        // Giữ nhiều tile hơn trong bộ nhớ đệm & không xoá khi đang zoom/pan để cảm giác mượt & nhanh hơn
-        keepBuffer: 6,
-        updateWhenZooming: false,
-        updateWhenIdle: true,
-        maxZoom: 19
-    });
-
-    // Nếu server tile hiện tại lỗi liên tục, tự động chuyển sang server dự phòng
-    let tileErrorCount = 0;
-    currentTileLayer.on('tileerror', () => {
-        tileErrorCount++;
-        if (tileErrorCount > 8 && index < TILE_PROVIDERS.length - 1) {
-            map.removeLayer(currentTileLayer);
-            currentTileIndex = index + 1;
-            addTileLayer(currentTileIndex);
-        }
-    });
-
-    currentTileLayer.addTo(map);
-}
 
 let rawRouteData = []; let rawOrderData = []; 
 let colOrderPO = -1, colOrderSales = -1;
@@ -468,9 +415,6 @@ async function loadRouteData() {
     const sts = document.getElementById('route-status');
     btn.disabled = true; sts.innerText = "⏳ Đang tải file Excel từ máy chủ..."; sts.style.color = "#ea580c";
 
-    // Khởi tạo bản đồ ngay khi bắt đầu tải dữ liệu (song song với việc tải Excel) để tiết kiệm thời gian
-    ensureMapInitialized();
-
     try {
         const { data: signedUrls, error } = await mySupabaseApp.storage.from('mappingdata').createSignedUrls(['map.xlsx', 'dh.xlsx'], 60);
         if (error || !signedUrls) throw error;
@@ -478,7 +422,6 @@ async function loadRouteData() {
         let urlMap = signedUrls.find(u => u.path === 'map.xlsx').signedUrl;
         let urlDH = signedUrls.find(u => u.path === 'dh.xlsx').signedUrl;
 
-        // Tải song song 2 file Excel thay vì tuần tự
         let [rMap, rDH] = await Promise.all([fetch(urlMap), fetch(urlDH)]);
         let [bMap, bDH] = await Promise.all([rMap.arrayBuffer(), rDH.arrayBuffer()]);
 
@@ -490,7 +433,6 @@ async function loadRouteData() {
         let wbDH = XLSX.read(bDH, {type: 'array'});
         rawOrderData = XLSX.utils.sheet_to_json(wbDH.Sheets[wbDH.SheetNames[0]], {header: 1});
         
-        // Cố định cột PO (16) và Doanh số (33)
         colOrderPO = 16; colOrderSales = 33; 
         for (let i = 0; i < Math.min(100, rawOrderData.length); i++) {
             if(!rawOrderData[i]) continue;
@@ -548,9 +490,11 @@ function renderRouteDashboard() {
         return; 
     }
 
-    ensureMapInitialized();
     document.getElementById('route-dashboard-wrapper').style.display = 'block';
-    document.getElementById('btn-download-ppt').disabled = false; // Mở khóa nút Tải Ảnh
+    document.getElementById('btn-download-ppt').disabled = false; 
+
+    // Đảm bảo map tính lại kích thước (do tab chuyển đổi)
+    setTimeout(() => { map.invalidateSize(); }, 100);
 
     document.getElementById('ui-kae-name').innerText = String(nv).toUpperCase();
     document.getElementById('ui-staff').innerText = nv;
@@ -620,7 +564,6 @@ function renderRouteDashboard() {
         totalVisit += dData.length; totalOrder += dayOrders; 
         totalSales += daySales; totalDist += dayDist;
 
-        // Bổ sung màu sắc cho chữ Thứ 2 -> Thứ 7 để khớp màu bản đồ
         let tr = `<tr>
             <td style="color: ${color}; font-weight: bold;">${day}</td>
             <td>${cIn}</td><td>${cOut}</td>
@@ -654,10 +597,9 @@ async function downloadReportPPT() {
 
     try {
         const element = document.getElementById('ppt-export-area');
-        // Gọi html2canvas chụp phần tử có kích thước 16:9
         const canvas = await html2canvas(element, { 
-            scale: 2,           // Tăng độ nét ảnh
-            useCORS: true,      // Cho phép tải ảnh bản đồ từ domain khác
+            scale: 2,           
+            useCORS: true,      
             allowTaint: false
         });
         
@@ -675,80 +617,28 @@ async function downloadReportPPT() {
     }
 }
 
-// --- Bộ nhớ đệm cảnh báo để không phải gọi lại App Script mỗi lần chọn lại cùng 1 nhân viên ---
-const warningsCache = {};
-
-async function fetchWarningsGAS(rawName, forceRefresh = false) {
+async function fetchWarningsGAS(rawName) {
     const wc = document.getElementById('warnings-list');
-    let clean = String(rawName).replace(/^(KAE|DSR)\s+/i, '').trim().toUpperCase();
-
-    // Dùng cache nếu có và còn "mới" (dưới 5 phút) trừ khi người dùng bấm thử lại
-    const CACHE_TTL_MS = 5 * 60 * 1000;
-    let cached = warningsCache[clean];
-    if (!forceRefresh && cached && (Date.now() - cached.time) < CACHE_TTL_MS) {
-        renderWarnings(cached.comments);
-        return;
-    }
-
     wc.innerHTML = '<i>Đang truy xuất nhận xét từ hệ thống...</i>';
-
-    // Apps Script có thể "cold start" (khởi động nguội) khá chậm và đôi khi timeout.
-    // Vì vậy: đặt giới hạn thời gian chờ + tự thử lại 1 lần nếu lần đầu thất bại.
-    const fetchWithTimeout = async (url, timeoutMs) => {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
-        try {
-            const res = await fetch(url, { signal: controller.signal });
-            clearTimeout(timer);
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return await res.json();
-        } catch (e) {
-            clearTimeout(timer);
-            throw e;
+    let clean = String(rawName).replace(/^(KAE|DSR)\s+/i, '').trim().toUpperCase();
+    try {
+        let res = await fetch(`${GAS_WEB_APP_URL}?kaeName=${encodeURIComponent(clean)}`);
+        let data = await res.json();
+        wc.innerHTML = '';
+        if (data.status === "success" && data.comments && data.comments.length > 0) {
+            data.comments.forEach(cmt => {
+                wc.insertAdjacentHTML('beforeend', `<div class="warning-item">
+                    <svg class="warning-icon" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2L2 22H22L12 2Z" fill="#b91c1c" stroke="#b91c1c" stroke-width="2" stroke-linejoin="round"/>
+                        <path d="M12 9V15" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M12 19H12.01" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    </svg><span>${cmt}</span></div>`);
+            });
+        } else {
+            wc.innerHTML = '<span style="color:#64748b; font-style: normal; font-size: 13px;">(Không có cảnh báo nào cho nhân viên này)</span>';
         }
-    };
-
-    const url = `${GAS_WEB_APP_URL}?kaeName=${encodeURIComponent(clean)}`;
-    let data = null;
-    let lastError = null;
-
-    for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-            data = await fetchWithTimeout(url, attempt === 1 ? 8000 : 15000); // lần 2 chờ lâu hơn phòng cold-start
-            lastError = null;
-            break;
-        } catch (e) {
-            lastError = e;
-        }
-    }
-
-    if (lastError) {
-        wc.innerHTML = `<span style="color:#b91c1c; font-size: 13px;">
-            (Không thể kết nối tới hệ thống cảnh báo — có thể do máy chủ Apps Script khởi động chậm.
-            <span class="retry-link" onclick="fetchWarningsGAS('${clean.replace(/'/g, "\\'")}', true)">Thử lại</span>)
-        </span>`;
-        return;
-    }
-
-    let comments = (data && data.status === "success" && Array.isArray(data.comments)) ? data.comments : [];
-    warningsCache[clean] = { comments, time: Date.now() };
-    renderWarnings(comments);
-}
-
-function renderWarnings(comments) {
-    const wc = document.getElementById('warnings-list');
-    wc.innerHTML = '';
-    if (comments && comments.length > 0) {
-        comments.forEach(cmt => {
-            wc.insertAdjacentHTML('beforeend', `<div class="warning-item">
-                <svg class="warning-icon" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 2L2 22H22L12 2Z" fill="#b91c1c" stroke="#b91c1c" stroke-width="2" stroke-linejoin="round"/>
-                    <path d="M12 9V15" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                    <path d="M12 19H12.01" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                </svg><span>${cmt}</span></div>`);
-        });
-    } else {
-        wc.innerHTML = '<span style="color:#64748b; font-style: normal; font-size: 13px;">(Không có cảnh báo nào cho nhân viên này)</span>';
+    } catch (err) {
+        wc.innerHTML = '<span style="color:#b91c1c; font-size: 13px;">(Lỗi kết nối tới App Script)</span>';
     }
 }
 
