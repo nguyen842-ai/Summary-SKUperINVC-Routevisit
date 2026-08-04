@@ -226,18 +226,35 @@ let dbMaster = []; let dbSales = [];
             return; 
         }
 
-        let secureFiles = ['dataM5.js', 'dataM6.js', 'dataM7.js', 'kamMap.js'];
+        // 1. CHỈ xin link Supabase cho 3 file data
+        let secureFiles = ['dataM5.js', 'dataM6.js', 'dataM7.js'];
         const { data: urls, error } = await mySupabaseApp.storage.from('data').createSignedUrls(secureFiles, 60);
         if (error || !urls) throw error;
 
+        // 2. Lấy các link Supabase hợp lệ
+        let validUrls = urls.filter(u => u.signedUrl).map(u => u.signedUrl);
+        
+        // 3. Nối thêm file kamMap.js từ nguồn Local (kèm tham số chống cache)
+        validUrls.push('kamMap.js?t=' + new Date().getTime());
+
+        if (validUrls.length === 0) {
+            initSkuLogic();
+            return;
+        }
+
         let loaded = 0;
-        urls.forEach(item => {
+        validUrls.forEach(srcUrl => {
             let script = document.createElement('script');
-            script.src = item.signedUrl;
+            script.src = srcUrl;
             script.onload = () => {
                 loaded++;
-                if (loaded === urls.length) initSkuLogic();
+                if (loaded === validUrls.length) initSkuLogic();
             };
+            script.onerror = () => {
+                console.warn("Lỗi khi tải file:", srcUrl);
+                loaded++;
+                if (loaded === validUrls.length) initSkuLogic();
+            }
             document.body.appendChild(script);
         });
     } catch (err) {
