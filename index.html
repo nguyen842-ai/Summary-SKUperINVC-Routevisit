@@ -381,7 +381,8 @@ function renderSkuTable() {
         let kams = [...new Set(hd.map(d=>cleanName(d.kam, true, d.area)))].filter(Boolean).sort();
         if(selPIC !== "ALL") kams = kams.filter(k=>k===selPIC);
         
-        let hTKae=0, hTDsr=0, hTHC=0; let hasHq=false;
+        let hasHq=false;
+        let hqStaffSet = new Set(); // Khử trùng nhân viên trong cùng HQ (tránh đếm 2 lần nếu 1 NV gắn với >1 KAM)
 
         kams.forEach(kam => {
             let kd = hd.filter(d=>cleanName(d.kam, true, d.area)===kam);
@@ -398,7 +399,7 @@ function renderSkuTable() {
                 
                 let stf = [...new Set([...am7.map(d=>d.kae), ...sm7.map(d=>d.kae)].map(n=>cleanName(n,false)))].filter(Boolean);
                 let kC = stf.filter(s=>s.includes('KAE')).length; let dC = stf.filter(s=>s.includes('DSR')).length; let tC = kC+dC;
-                hTKae+=kC; hTDsr+=dC; hTHC+=tC;
+                stf.forEach(s => hqStaffSet.add(s));
 
                 let avg5 = calculateAvgSku(sm5); let avg6 = calculateAvgSku(sm6); let avg7 = calculateAvgSku(sm7);
                 let lA=0, lN=0;
@@ -418,6 +419,10 @@ function renderSkuTable() {
             });
         });
         if(hasHq) {
+            let hStaff = [...hqStaffSet];
+            let hTKae = hStaff.filter(s=>s.includes('KAE')).length;
+            let hTDsr = hStaff.filter(s=>s.includes('DSR')).length;
+            let hTHC = hTKae + hTDsr;
             nTKae+=hTKae; nTDsr+=hTDsr; nTHC+=hTHC;
             html+=`<tr class="sub-total-row"><td colspan="3" class="text-left">Total ${hq}</td><td>${hTKae||''}</td><td>${hTDsr||''}</td><td>${hTHC||''}</td><td colspan="9"></td></tr>`;
         }
