@@ -125,17 +125,19 @@
         <table class="sku-table" id="areaTrackingTable">
             <thead>
                 <tr>
-                    <th rowspan="2" style="width: 8%;">HQ/<br><i>Vùng</i></th>
-                    <th rowspan="2" style="width: 14%;">Area/<br><i>Khu vực</i></th>
+                    <th rowspan="2" style="width: 5%;">HQ/<br><i>Vùng</i></th>
+                    <th rowspan="2" style="width: 10%;">Area/<br><i>Khu vực</i></th>
                     <th colspan="3">No. of HC</th>
                     <th colspan="3">SKU/ invoice</th>
-                    <th rowspan="2" style="width: 8%;">SKU/invc<br>toàn quốc</th>
-                    <th colspan="2">No. of HC in July'26</th>
+                    <th rowspan="2" style="width: 6%;">SKU/invc<br>vùng (HQ)</th>
+                    <th rowspan="2" style="width: 6%;">SKU/invc<br>toàn quốc</th>
+                    <th colspan="4">No. of HC in July'26</th>
                 </tr>
                 <tr>
-                    <th style="width: 6%;">KAE</th><th style="width: 6%;">DSR</th><th style="width: 6%;">Total</th>
-                    <th style="width: 7%;">May</th><th style="width: 7%;">June</th><th style="width: 7%;">July</th>
-                    <th style="width: 16%;">Lower than nationwide SKU/ invoice</th><th style="width: 7%;">% of Staff</th>
+                    <th style="width: 4%;">KAE</th><th style="width: 4%;">DSR</th><th style="width: 4%;">Total</th>
+                    <th style="width: 5%;">May</th><th style="width: 5%;">June</th><th style="width: 5%;">July</th>
+                    <th style="width: 12%;">Lower than HQ SKU/ invoice</th><th style="width: 5%;">% of Staff</th>
+                    <th style="width: 12%;">Lower than nationwide SKU/ invoice</th><th style="width: 5%;">% of Staff</th>
                 </tr>
             </thead>
             <tbody id="areaSkuTrackingBody"></tbody>
@@ -451,6 +453,7 @@ function renderAreaSkuTable() {
 
     let natStaffSet = new Set();
     let natSalesFiltered = [];
+    let nTHQLower = 0;
 
     hqs.forEach(hq => {
         let hd = all.filter(d=>d.hq===hq);
@@ -460,6 +463,9 @@ function renderAreaSkuTable() {
         let hasHq = false;
         let hqStaffSet = new Set();
         let hqSalesFiltered = [];
+
+        let hqSalesJul = dbSales.filter(d=>d.hq===hq && isMonth(d.month, 7));
+        let hqAvg = calculateAvgSku(hqSalesJul);
 
         ars.forEach(ar => {
             let am = dbMaster.filter(d=>d.hq===hq && d.area===ar);
@@ -478,9 +484,10 @@ function renderAreaSkuTable() {
             stf.forEach(s => { hqStaffSet.add(s); natStaffSet.add(s); });
 
             let avg5 = calculateAvgSku(sm5); let avg6 = calculateAvgSku(sm6); let avg7 = calculateAvgSku(sm7);
-            let lN=0;
+            let lHQ=0, lN=0;
             stf.forEach(s => {
                 let sAvg = calculateAvgSku(sm7.filter(d=>cleanName(d.kae,false)===s));
+                if(sAvg>0 && sAvg<hqAvg) lHQ++;
                 if(sAvg>0 && sAvg<natAvg) lN++;
             });
 
@@ -488,7 +495,9 @@ function renderAreaSkuTable() {
                 <td class="text-left">${hq}</td><td class="text-left">${ar}</td>
                 <td>${kC||''}</td><td>${dC||''}</td><td>${tC||''}</td>
                 <td>${avg5?avg5.toFixed(1):''}</td><td>${avg6?avg6.toFixed(1):''}</td><td>${avg7?avg7.toFixed(1):''}</td>
+                <td>${hqAvg?hqAvg.toFixed(1):''}</td>
                 <td>${natAvg?natAvg.toFixed(1):''}</td>
+                <td>${lHQ||''}</td><td>${tC?((lHQ/tC)*100).toFixed(0)+'%':'0%'}</td>
                 <td>${lN||''}</td><td>${tC?((lN/tC)*100).toFixed(0)+'%':'0%'}</td>
             </tr>`;
         });
@@ -507,18 +516,24 @@ function renderAreaSkuTable() {
             let hqAvg6 = calculateAvgSku(hqSm6);
             let hqAvg7 = calculateAvgSku(hqSm7);
 
-            let hqLowerN = 0;
+            let hqLowerHQ = 0;
+            let hqLowerNat = 0;
             hStaff.forEach(s => {
                 let sAvg = calculateAvgSku(hqSm7.filter(d=>cleanName(d.kae,false)===s));
-                if(sAvg>0 && sAvg<natAvg) hqLowerN++;
+                if(sAvg>0 && sAvg<hqAvg7) hqLowerHQ++;
+                if(sAvg>0 && sAvg<natAvg) hqLowerNat++;
             });
+
+            nTHQLower += hqLowerHQ;
 
             html+=`<tr class="sub-total-row">
                 <td colspan="2" class="text-left">Total ${hq}</td>
                 <td>${hTKae||''}</td><td>${hTDsr||''}</td><td>${hTHC||''}</td>
                 <td>${hqAvg5?hqAvg5.toFixed(1):''}</td><td>${hqAvg6?hqAvg6.toFixed(1):''}</td><td>${hqAvg7?hqAvg7.toFixed(1):''}</td>
+                <td>${hqAvg7?hqAvg7.toFixed(1):''}</td>
                 <td>${natAvg?natAvg.toFixed(1):''}</td>
-                <td>${hqLowerN||''}</td><td>${hTHC?((hqLowerN/hTHC)*100).toFixed(0)+'%':'0%'}</td>
+                <td>${hqLowerHQ||''}</td><td>${hTHC?((hqLowerHQ/hTHC)*100).toFixed(0)+'%':'0%'}</td>
+                <td>${hqLowerNat||''}</td><td>${hTHC?((hqLowerNat/hTHC)*100).toFixed(0)+'%':'0%'}</td>
             </tr>`;
         }
     });
@@ -536,18 +551,20 @@ function renderAreaSkuTable() {
     let natAvg6Vis = calculateAvgSku(natSm6);
     let natAvg7Vis = calculateAvgSku(natSm7);
 
-    let natLowerN = 0;
+    let natLowerNat = 0;
     nStaff.forEach(s => {
         let sAvg = calculateAvgSku(natSm7.filter(d=>cleanName(d.kae,false)===s));
-        if(sAvg>0 && sAvg<natAvg) natLowerN++;
+        if(sAvg>0 && sAvg<natAvg) natLowerNat++;
     });
 
     html+=`<tr class="grand-total-row">
         <td colspan="2" class="text-left">Total Nationwide</td>
         <td>${nTKae||''}</td><td>${nTDsr||''}</td><td>${nTHC||''}</td>
         <td>${natAvg5Vis?natAvg5Vis.toFixed(1):''}</td><td>${natAvg6Vis?natAvg6Vis.toFixed(1):''}</td><td>${natAvg7Vis?natAvg7Vis.toFixed(1):''}</td>
+        <td></td>
         <td>${natAvg?natAvg.toFixed(1):''}</td>
-        <td>${natLowerN||''}</td><td>${nTHC?((natLowerN/nTHC)*100).toFixed(0)+'%':'0%'}</td>
+        <td>${nTHQLower||''}</td><td>${nTHC?((nTHQLower/nTHC)*100).toFixed(0)+'%':'0%'}</td>
+        <td>${natLowerNat||''}</td><td>${nTHC?((natLowerNat/nTHC)*100).toFixed(0)+'%':'0%'}</td>
     </tr>`;
 
     tb.innerHTML = html;
