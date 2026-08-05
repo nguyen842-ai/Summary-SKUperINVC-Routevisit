@@ -365,7 +365,7 @@ function isMonth(val, m) {
     if(m===7) return str.includes('7')||str.includes('jul'); return false;
 }
 
-// ----- TAB 1: TRACKING SKU BY KAM (CÓ TÍNH TOÁN TOTAL HQ VÀ NATIONWIDE CHI TIẾT) -----
+// ----- TAB 1: TRACKING SKU BY KAM -----
 function renderSkuTable() {
     let selHQ = document.getElementById('filterHQ').value;
     let selPIC = document.getElementById('filterPIC').value;
@@ -379,6 +379,7 @@ function renderSkuTable() {
     
     let natStaffSet = new Set();
     let natSalesFiltered = [];
+    let nTHQLower = 0; // Biến cộng dồn lỗi Lower Than HQ cho dòng Toàn quốc
 
     hqs.forEach(hq => {
         let hd = all.filter(d=>d.hq===hq);
@@ -428,6 +429,7 @@ function renderSkuTable() {
                 </tr>`;
             });
         });
+        
         if(hasHq) {
             let hStaff = [...hqStaffSet];
             let hTKae = hStaff.filter(s=>s.includes('KAE')).length;
@@ -449,6 +451,8 @@ function renderSkuTable() {
                 if(sAvg>0 && sAvg<hqAvg7) hqLowerHQ++;
                 if(sAvg>0 && sAvg<natAvg) hqLowerNat++;
             });
+
+            nTHQLower += hqLowerHQ;
 
             html+=`<tr class="sub-total-row">
                 <td colspan="3" class="text-left">Total ${hq}</td>
@@ -487,7 +491,7 @@ function renderSkuTable() {
         <td>${natAvg5Vis?natAvg5Vis.toFixed(1):''}</td><td>${natAvg6Vis?natAvg6Vis.toFixed(1):''}</td><td>${natAvg7Vis?natAvg7Vis.toFixed(1):''}</td>
         <td></td>
         <td>${natAvg?natAvg.toFixed(1):''}</td>
-        <td></td><td></td>
+        <td>${nTHQLower||''}</td><td>${nTHC?((nTHQLower/nTHC)*100).toFixed(0)+'%':'0%'}</td>
         <td>${natLowerNat||''}</td><td>${nTHC?((natLowerNat/nTHC)*100).toFixed(0)+'%':'0%'}</td>
     </tr>`;
 
@@ -499,7 +503,7 @@ function exportExcel() {
     XLSX.writeFile(wb, "Tracking_SKU_Invoice_By_KAM.xlsx");
 }
 
-// ----- TAB 0: TRACKING SKU BY AREA (CÓ TÍNH TOÁN TOTAL HQ VÀ TOTAL NATIONWIDE) -----
+// ----- TAB 0: TRACKING SKU BY AREA -----
 function renderAreaSkuTable() {
     let selHQ = document.getElementById('filterAreaHQ').value;
     let selArea = document.getElementById('filterAreaOnly').value;
@@ -643,7 +647,7 @@ function exportAreaExcel() {
 let rawRouteData = []; let rawOrderData = []; 
 let colOrderPO = -1, colOrderSales = -1;
 let globalDateRange = "";
-let globalWarningsData = null; // Kho chứa toàn bộ comment tải từ Google
+let globalWarningsData = null; 
 
 const COL = { NPP: 2, NV: 6, THU: 11, STT_GHE: 12, LO_TRINH: 13, MA_KH: 14, TEN_KH: 15, TIME_IN: 19, TIME_OUT: 20, TIME_TOTAL: 21, DS_DON_HANG: 22, LAT: 30, LNG: 31, AREA: 37 };
 const DAYS_ORDER = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
@@ -661,7 +665,6 @@ async function loadRouteData() {
         let urlMap = signedUrls.find(u => u.path === 'map.xlsx').signedUrl;
         let urlDH = signedUrls.find(u => u.path === 'dh.xlsx').signedUrl;
 
-        // TẢI SONG SONG: Excel Map, Excel Order VÀ Dữ liệu App Script
         let [rMap, rDH, rWarn] = await Promise.all([
             fetch(urlMap), 
             fetch(urlDH),
@@ -688,7 +691,6 @@ async function loadRouteData() {
             }
         }
 
-        // Xử lý Cảnh báo từ Google
         if (rWarn) {
             try {
                 let warnData = await rWarn.json();
