@@ -106,14 +106,47 @@
 
 <!-- ĐIỀU HƯỚNG TABS -->
 <div class="tabs-container">
-    <button class="tab-btn active" onclick="switchTab('tab-sku', this)">📊 Tracking SKU Dashboard</button>
+    <button class="tab-btn active" onclick="switchTab('tab-area', this)">🌍 Tracking SKU by Area</button>
+    <button class="tab-btn" onclick="switchTab('tab-sku', this)">📊 Tracking SKU Dashboard</button>
     <button class="tab-btn" onclick="switchTab('tab-route', this)">🗺️ Route Map Report</button>
+</div>
+
+<!-- ========================================== -->
+<!-- TAB 0: TRACKING SKU & INVOICE BY AREA      -->
+<!-- ========================================== -->
+<div id="tab-area" class="tab-content active">
+    <h2 style="margin-top:0;">TRACKING SKU/ INVOICE BY AREA - JULY 2026</h2>
+    <div class="controls-bar">
+        <div class="filter-group"><label>Vùng (HQ):</label><select id="filterAreaHQ" onchange="renderAreaSkuTable()"><option value="ALL">Tất cả</option></select></div>
+        <div class="filter-group"><label>Khu vực (Area):</label><select id="filterAreaOnly" onchange="renderAreaSkuTable()"><option value="ALL">Tất cả</option></select></div>
+        <button class="btn-excel" onclick="exportAreaExcel()">📥 TẢI XUỐNG EXCEL</button>
+    </div>
+    <div style="width: 100%; overflow-x: auto;">
+        <table class="sku-table" id="areaTrackingTable">
+            <thead>
+                <tr>
+                    <th rowspan="2" style="width: 8%;">HQ/<br><i>Vùng</i></th>
+                    <th rowspan="2" style="width: 14%;">Area/<br><i>Khu vực</i></th>
+                    <th colspan="3">No. of HC</th>
+                    <th colspan="3">SKU/ invoice</th>
+                    <th rowspan="2" style="width: 8%;">SKU/invc<br>toàn quốc</th>
+                    <th colspan="2">No. of HC in July'26</th>
+                </tr>
+                <tr>
+                    <th style="width: 6%;">KAE</th><th style="width: 6%;">DSR</th><th style="width: 6%;">Total</th>
+                    <th style="width: 7%;">May</th><th style="width: 7%;">June</th><th style="width: 7%;">July</th>
+                    <th style="width: 16%;">Lower than nationwide SKU/ invoice</th><th style="width: 7%;">% of Staff</th>
+                </tr>
+            </thead>
+            <tbody id="areaSkuTrackingBody"></tbody>
+        </table>
+    </div>
 </div>
 
 <!-- ========================================== -->
 <!-- TAB 1: TRACKING SKU & INVOICE              -->
 <!-- ========================================== -->
-<div id="tab-sku" class="tab-content active">
+<div id="tab-sku" class="tab-content">
     <h2 style="margin-top:0;">TRACKING SKU/ INVOICE IN JULY 2026</h2>
     <div class="controls-bar">
         <div class="filter-group"><label>Vùng (HQ):</label><select id="filterHQ" onchange="renderSkuTable()"><option value="ALL">Tất cả</option></select></div>
@@ -297,7 +330,9 @@ function initSkuLogic() {
         list.forEach(i => sel.add(new Option(i, i)));
     };
     pop('filterHQ', hqs); pop('filterPIC', pics); pop('filterArea', areas);
+    pop('filterAreaHQ', hqs); pop('filterAreaOnly', areas);
     renderSkuTable();
+    renderAreaSkuTable();
 
     setTimeout(() => {
         const loader = document.getElementById('loader-wrapper');
@@ -395,6 +430,66 @@ function renderSkuTable() {
 function exportExcel() {
     let wb = XLSX.utils.table_to_book(document.getElementById("trackingTable"), {sheet: "Tracking SKU", raw: true});
     XLSX.writeFile(wb, "Tracking_SKU_Invoice.xlsx");
+}
+
+// ----- TAB 0: TRACKING SKU BY AREA (không có cột KAM) -----
+function renderAreaSkuTable() {
+    let selHQ = document.getElementById('filterAreaHQ').value;
+    let selArea = document.getElementById('filterAreaOnly').value;
+    let all = [...dbMaster, ...dbSales];
+    let html = ''; let tb = document.getElementById('areaSkuTrackingBody');
+
+    let natSJul = dbSales.filter(d => isMonth(d.month, 7));
+    let natAvg = calculateAvgSku(natSJul);
+    let hqs = (selHQ !== "ALL") ? [selHQ] : [...new Set(all.map(d=>d.hq))].filter(Boolean).sort();
+
+    let nTKae=0, nTDsr=0, nTHC=0;
+
+    hqs.forEach(hq => {
+        let hd = all.filter(d=>d.hq===hq);
+        let ars = [...new Set(hd.map(d=>d.area))].filter(Boolean).sort();
+        if(selArea!=="ALL") ars = ars.filter(a=>a===selArea);
+
+        let hasHq = false;
+
+        ars.forEach(ar => {
+            let am = dbMaster.filter(d=>d.hq===hq && d.area===ar);
+            let as = dbSales.filter(d=>d.hq===hq && d.area===ar);
+            hasHq = true;
+
+            let sm5 = as.filter(d=>isMonth(d.month,5)); let sm6 = as.filter(d=>isMonth(d.month,6)); let sm7 = as.filter(d=>isMonth(d.month,7));
+            let am7 = am.filter(d=>isMonth(d.month,7));
+
+            let stf = [...new Set([...am7.map(d=>d.kae), ...sm7.map(d=>d.kae)].map(n=>cleanName(n,false)))].filter(Boolean);
+            let kC = stf.filter(s=>s.includes('KAE')).length; let dC = stf.filter(s=>s.includes('DSR')).length; let tC = kC+dC;
+            nTKae+=kC; nTDsr+=dC; nTHC+=tC;
+
+            let avg5 = calculateAvgSku(sm5); let avg6 = calculateAvgSku(sm6); let avg7 = calculateAvgSku(sm7);
+            let lN=0;
+            stf.forEach(s => {
+                let sAvg = calculateAvgSku(sm7.filter(d=>cleanName(d.kae,false)===s));
+                if(sAvg>0 && sAvg<natAvg) lN++;
+            });
+
+            html+=`<tr>
+                <td class="text-left">${hq}</td><td class="text-left">${ar}</td>
+                <td>${kC||''}</td><td>${dC||''}</td><td>${tC||''}</td>
+                <td>${avg5?avg5.toFixed(1):''}</td><td>${avg6?avg6.toFixed(1):''}</td><td>${avg7?avg7.toFixed(1):''}</td>
+                <td>${natAvg?natAvg.toFixed(1):''}</td>
+                <td>${lN||''}</td><td>${tC?((lN/tC)*100).toFixed(0)+'%':'0%'}</td>
+            </tr>`;
+        });
+        // Không cần dòng sub-total riêng cho HQ vì mỗi dòng đã là 1 Area
+        if(!hasHq) { /* no rows for this HQ under current filters */ }
+    });
+
+    html+=`<tr class="grand-total-row"><td colspan="2" class="text-left">Total Nationwide</td><td>${nTKae||''}</td><td>${nTDsr||''}</td><td>${nTHC||''}</td><td></td><td></td><td>${natAvg?natAvg.toFixed(1):''}</td><td>${natAvg?natAvg.toFixed(1):''}</td><td colspan="2"></td></tr>`;
+    tb.innerHTML = html;
+}
+
+function exportAreaExcel() {
+    let wb = XLSX.utils.table_to_book(document.getElementById("areaTrackingTable"), {sheet: "Tracking SKU by Area", raw: true});
+    XLSX.writeFile(wb, "Tracking_SKU_Invoice_By_Area.xlsx");
 }
 
 
