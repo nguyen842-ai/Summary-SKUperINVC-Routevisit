@@ -241,7 +241,7 @@ var SUPABASE_ANON_KEY = 'sb_publishable_itZfZBVw7bxE184tGh7x8A_0_r-QB5p';
 var mySupabaseApp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 var GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz95Ef0J6INUxifTh4-NNNiXBrXYszhZPf7hcwgthdBGxqfSujfwy5oFQCdn6lwbXEY/exec";
 
-// Khởi tạo Map toàn cục (Bật preferCanvas để render line chuẩn HTML2Canvas)
+// Khởi tạo Map toàn cục
 const map = L.map('map', { preferCanvas: true }).setView([10.8231, 106.6297], 10);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
 let routeLayer = L.layerGroup().addTo(map);
@@ -255,14 +255,13 @@ function switchTab(tabId, btnElement) {
     document.getElementById(tabId).classList.add('active');
     btnElement.classList.add('active');
     
-    // Bắt buộc gọi invalidateSize khi mở lại tab có chứa Leaflet
     if (tabId === 'tab-route') {
         setTimeout(() => { map.invalidateSize(); }, 200);
     }
 }
 
 // =====================================================================
-// PHẦN 1: LOGIC TAB 1 (SKU DASHBOARD)
+// PHẦN 1: LOGIC TAB 1 (SKU DASHBOARD) & TAB 0 (AREA)
 // =====================================================================
 let dbMaster = []; let dbSales = [];
 
@@ -331,6 +330,7 @@ function initSkuLogic() {
     };
     pop('filterHQ', hqs); pop('filterPIC', pics); pop('filterArea', areas);
     pop('filterAreaHQ', hqs); pop('filterAreaOnly', areas);
+    
     renderSkuTable();
     renderAreaSkuTable();
 
@@ -382,7 +382,7 @@ function renderSkuTable() {
         if(selPIC !== "ALL") kams = kams.filter(k=>k===selPIC);
         
         let hasHq=false;
-        let hqStaffSet = new Set(); // Khử trùng nhân viên trong cùng HQ (tránh đếm 2 lần nếu 1 NV gắn với >1 KAM)
+        let hqStaffSet = new Set(); 
 
         kams.forEach(kam => {
             let kd = hd.filter(d=>cleanName(d.kam, true, d.area)===kam);
@@ -437,7 +437,7 @@ function exportExcel() {
     XLSX.writeFile(wb, "Tracking_SKU_Invoice.xlsx");
 }
 
-// ----- TAB 0: TRACKING SKU BY AREA (không có cột KAM) -----
+// ----- TAB 0: TRACKING SKU BY AREA (CÓ TÍNH TOÁN TOTAL HQ VÀ TOTAL NATIONWIDE) -----
 function renderAreaSkuTable() {
     let selHQ = document.getElementById('filterAreaHQ').value;
     let selArea = document.getElementById('filterAreaOnly').value;
@@ -445,10 +445,12 @@ function renderAreaSkuTable() {
     let html = ''; let tb = document.getElementById('areaSkuTrackingBody');
 
     let natSJul = dbSales.filter(d => isMonth(d.month, 7));
-    let natAvg = calculateAvgSku(natSJul);
+    let natAvg = calculateAvgSku(natSJul); 
+    
     let hqs = (selHQ !== "ALL") ? [selHQ] : [...new Set(all.map(d=>d.hq))].filter(Boolean).sort();
 
-    let nTKae=0, nTDsr=0, nTHC=0;
+    let natStaffSet = new Set();
+    let natSalesFiltered = [];
 
     hqs.forEach(hq => {
         let hd = all.filter(d=>d.hq===hq);
@@ -456,18 +458,24 @@ function renderAreaSkuTable() {
         if(selArea!=="ALL") ars = ars.filter(a=>a===selArea);
 
         let hasHq = false;
+        let hqStaffSet = new Set();
+        let hqSalesFiltered = [];
 
         ars.forEach(ar => {
             let am = dbMaster.filter(d=>d.hq===hq && d.area===ar);
             let as = dbSales.filter(d=>d.hq===hq && d.area===ar);
             hasHq = true;
 
+            hqSalesFiltered.push(...as);
+            natSalesFiltered.push(...as);
+
             let sm5 = as.filter(d=>isMonth(d.month,5)); let sm6 = as.filter(d=>isMonth(d.month,6)); let sm7 = as.filter(d=>isMonth(d.month,7));
             let am7 = am.filter(d=>isMonth(d.month,7));
 
             let stf = [...new Set([...am7.map(d=>d.kae), ...sm7.map(d=>d.kae)].map(n=>cleanName(n,false)))].filter(Boolean);
             let kC = stf.filter(s=>s.includes('KAE')).length; let dC = stf.filter(s=>s.includes('DSR')).length; let tC = kC+dC;
-            nTKae+=kC; nTDsr+=dC; nTHC+=tC;
+            
+            stf.forEach(s => { hqStaffSet.add(s); natStaffSet.add(s); });
 
             let avg5 = calculateAvgSku(sm5); let avg6 = calculateAvgSku(sm6); let avg7 = calculateAvgSku(sm7);
             let lN=0;
@@ -484,11 +492,64 @@ function renderAreaSkuTable() {
                 <td>${lN||''}</td><td>${tC?((lN/tC)*100).toFixed(0)+'%':'0%'}</td>
             </tr>`;
         });
-        // Không cần dòng sub-total riêng cho HQ vì mỗi dòng đã là 1 Area
-        if(!hasHq) { /* no rows for this HQ under current filters */ }
+        
+        if(hasHq) {
+            let hStaff = [...hqStaffSet];
+            let hTKae = hStaff.filter(s=>s.includes('KAE')).length;
+            let hTDsr = hStaff.filter(s=>s.includes('DSR')).length;
+            let hTHC = hTKae + hTDsr;
+
+            let hqSm5 = hqSalesFiltered.filter(d=>isMonth(d.month,5));
+            let hqSm6 = hqSalesFiltered.filter(d=>isMonth(d.month,6));
+            let hqSm7 = hqSalesFiltered.filter(d=>isMonth(d.month,7));
+            
+            let hqAvg5 = calculateAvgSku(hqSm5);
+            let hqAvg6 = calculateAvgSku(hqSm6);
+            let hqAvg7 = calculateAvgSku(hqSm7);
+
+            let hqLowerN = 0;
+            hStaff.forEach(s => {
+                let sAvg = calculateAvgSku(hqSm7.filter(d=>cleanName(d.kae,false)===s));
+                if(sAvg>0 && sAvg<natAvg) hqLowerN++;
+            });
+
+            html+=`<tr class="sub-total-row">
+                <td colspan="2" class="text-left">Total ${hq}</td>
+                <td>${hTKae||''}</td><td>${hTDsr||''}</td><td>${hTHC||''}</td>
+                <td>${hqAvg5?hqAvg5.toFixed(1):''}</td><td>${hqAvg6?hqAvg6.toFixed(1):''}</td><td>${hqAvg7?hqAvg7.toFixed(1):''}</td>
+                <td>${natAvg?natAvg.toFixed(1):''}</td>
+                <td>${hqLowerN||''}</td><td>${hTHC?((hqLowerN/hTHC)*100).toFixed(0)+'%':'0%'}</td>
+            </tr>`;
+        }
     });
 
-    html+=`<tr class="grand-total-row"><td colspan="2" class="text-left">Total Nationwide</td><td>${nTKae||''}</td><td>${nTDsr||''}</td><td>${nTHC||''}</td><td></td><td></td><td>${natAvg?natAvg.toFixed(1):''}</td><td>${natAvg?natAvg.toFixed(1):''}</td><td colspan="2"></td></tr>`;
+    let nStaff = [...natStaffSet];
+    let nTKae = nStaff.filter(s=>s.includes('KAE')).length;
+    let nTDsr = nStaff.filter(s=>s.includes('DSR')).length;
+    let nTHC = nTKae + nTDsr;
+
+    let natSm5 = natSalesFiltered.filter(d=>isMonth(d.month,5));
+    let natSm6 = natSalesFiltered.filter(d=>isMonth(d.month,6));
+    let natSm7 = natSalesFiltered.filter(d=>isMonth(d.month,7));
+    
+    let natAvg5Vis = calculateAvgSku(natSm5);
+    let natAvg6Vis = calculateAvgSku(natSm6);
+    let natAvg7Vis = calculateAvgSku(natSm7);
+
+    let natLowerN = 0;
+    nStaff.forEach(s => {
+        let sAvg = calculateAvgSku(natSm7.filter(d=>cleanName(d.kae,false)===s));
+        if(sAvg>0 && sAvg<natAvg) natLowerN++;
+    });
+
+    html+=`<tr class="grand-total-row">
+        <td colspan="2" class="text-left">Total Nationwide</td>
+        <td>${nTKae||''}</td><td>${nTDsr||''}</td><td>${nTHC||''}</td>
+        <td>${natAvg5Vis?natAvg5Vis.toFixed(1):''}</td><td>${natAvg6Vis?natAvg6Vis.toFixed(1):''}</td><td>${natAvg7Vis?natAvg7Vis.toFixed(1):''}</td>
+        <td>${natAvg?natAvg.toFixed(1):''}</td>
+        <td>${natLowerN||''}</td><td>${nTHC?((natLowerN/nTHC)*100).toFixed(0)+'%':'0%'}</td>
+    </tr>`;
+
     tb.innerHTML = html;
 }
 
@@ -527,7 +588,7 @@ async function loadRouteData() {
         let [rMap, rDH, rWarn] = await Promise.all([
             fetch(urlMap), 
             fetch(urlDH),
-            fetch(GAS_WEB_APP_URL).catch(e => null) // Bỏ qua lỗi nếu mạng chặn để không sập web
+            fetch(GAS_WEB_APP_URL).catch(e => null) 
         ]);
 
         let [bMap, bDH] = await Promise.all([rMap.arrayBuffer(), rDH.arrayBuffer()]);
@@ -555,7 +616,7 @@ async function loadRouteData() {
             try {
                 let warnData = await rWarn.json();
                 if (warnData.status === "success") {
-                    globalWarningsData = warnData.data; // Lưu trọn bộ vào kho
+                    globalWarningsData = warnData.data; 
                 }
             } catch(e) { console.error("Lỗi phân tích JSON cảnh báo:", e); }
         }
@@ -704,7 +765,6 @@ function renderRouteDashboard() {
     displayWarnings(nv);
 }
 
-// Hàm lấy Cảnh báo từ bộ nhớ thay vì gọi App Script liên tục
 function displayWarnings(rawName) {
     const wc = document.getElementById('warnings-list');
     let clean = String(rawName).replace(/^(KAE|DSR)\s+/i, '').trim().toUpperCase();
