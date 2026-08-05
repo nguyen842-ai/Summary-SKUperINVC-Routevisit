@@ -125,19 +125,19 @@
         <table class="sku-table" id="areaTrackingTable">
             <thead>
                 <tr>
-                    <th rowspan="2" style="width: 5%;">HQ/<br><i>Vùng</i></th>
-                    <th rowspan="2" style="width: 10%;">Area/<br><i>Khu vực</i></th>
+                    <th rowspan="2" style="width: 8%;">HQ/<br><i>Vùng</i></th>
+                    <th rowspan="2" style="width: 14%;">Area/<br><i>Khu vực</i></th>
                     <th colspan="3">No. of HC</th>
                     <th colspan="3">SKU/ invoice</th>
-                    <th rowspan="2" style="width: 6%;">SKU/invc<br>vùng (HQ)</th>
-                    <th rowspan="2" style="width: 6%;">SKU/invc<br>toàn quốc</th>
+                    <th rowspan="2" style="width: 8%;">SKU/invc<br>vùng (HQ)</th>
+                    <th rowspan="2" style="width: 8%;">SKU/invc<br>toàn quốc</th>
                     <th colspan="4">No. of HC in July'26</th>
                 </tr>
                 <tr>
-                    <th style="width: 4%;">KAE</th><th style="width: 4%;">DSR</th><th style="width: 4%;">Total</th>
-                    <th style="width: 5%;">May</th><th style="width: 5%;">June</th><th style="width: 5%;">July</th>
-                    <th style="width: 12%;">Lower than HQ SKU/ invoice</th><th style="width: 5%;">% of Staff</th>
-                    <th style="width: 12%;">Lower than nationwide SKU/ invoice</th><th style="width: 5%;">% of Staff</th>
+                    <th style="width: 6%;">KAE</th><th style="width: 6%;">DSR</th><th style="width: 6%;">Total</th>
+                    <th style="width: 7%;">May</th><th style="width: 7%;">June</th><th style="width: 7%;">July</th>
+                    <th style="width: 12%;">Lower than HQ SKU/ invoice</th><th style="width: 7%;">% of Staff</th>
+                    <th style="width: 12%;">Lower than nationwide SKU/ invoice</th><th style="width: 7%;">% of Staff</th>
                 </tr>
             </thead>
             <tbody id="areaSkuTrackingBody"></tbody>
@@ -172,8 +172,8 @@
                 <tr>
                     <th style="width: 4%;">KAE</th><th style="width: 4%;">DSR</th><th style="width: 4%;">Total</th>
                     <th style="width: 5%;">May</th><th style="width: 5%;">June</th><th style="width: 5%;">July</th>
-                    <th style="width: 12%;">Lower than area SKU/ invoice</th><th style="width: 5%;">% of Staff</th>
-                    <th style="width: 12%;">Lower than nationwide SKU/ invoice</th><th style="width: 5%;">% of Staff</th>
+                    <th style="width: 12%;">Lower than area/HQ SKU</th><th style="width: 5%;">% of Staff</th>
+                    <th style="width: 12%;">Lower than nationwide SKU</th><th style="width: 5%;">% of Staff</th>
                 </tr>
             </thead>
             <tbody id="skuTrackingBody"></tbody>
@@ -365,6 +365,7 @@ function isMonth(val, m) {
     if(m===7) return str.includes('7')||str.includes('jul'); return false;
 }
 
+// ----- TAB 1: TRACKING SKU BY KAM (CÓ TÍNH TOÁN TOTAL HQ VÀ NATIONWIDE CHI TIẾT) -----
 function renderSkuTable() {
     let selHQ = document.getElementById('filterHQ').value;
     let selPIC = document.getElementById('filterPIC').value;
@@ -376,7 +377,8 @@ function renderSkuTable() {
     let natAvg = calculateAvgSku(natSJul);
     let hqs = (selHQ !== "ALL") ? [selHQ] : [...new Set(all.map(d=>d.hq))].filter(Boolean).sort();
     
-    let nTKae=0, nTDsr=0, nTHC=0;
+    let natStaffSet = new Set();
+    let natSalesFiltered = [];
 
     hqs.forEach(hq => {
         let hd = all.filter(d=>d.hq===hq);
@@ -385,6 +387,7 @@ function renderSkuTable() {
         
         let hasHq=false;
         let hqStaffSet = new Set(); 
+        let hqSalesFiltered = [];
 
         kams.forEach(kam => {
             let kd = hd.filter(d=>cleanName(d.kam, true, d.area)===kam);
@@ -396,18 +399,23 @@ function renderSkuTable() {
                 let as = dbSales.filter(d=>d.hq===hq && cleanName(d.kam,true,d.area)===kam && d.area===ar);
                 hasHq = true;
 
+                hqSalesFiltered.push(...as);
+                natSalesFiltered.push(...as);
+
                 let sm5 = as.filter(d=>isMonth(d.month,5)); let sm6 = as.filter(d=>isMonth(d.month,6)); let sm7 = as.filter(d=>isMonth(d.month,7));
                 let am7 = am.filter(d=>isMonth(d.month,7));
                 
                 let stf = [...new Set([...am7.map(d=>d.kae), ...sm7.map(d=>d.kae)].map(n=>cleanName(n,false)))].filter(Boolean);
                 let kC = stf.filter(s=>s.includes('KAE')).length; let dC = stf.filter(s=>s.includes('DSR')).length; let tC = kC+dC;
-                stf.forEach(s => hqStaffSet.add(s));
+                
+                stf.forEach(s => { hqStaffSet.add(s); natStaffSet.add(s); });
 
                 let avg5 = calculateAvgSku(sm5); let avg6 = calculateAvgSku(sm6); let avg7 = calculateAvgSku(sm7);
                 let lA=0, lN=0;
                 stf.forEach(s => {
                     let sAvg = calculateAvgSku(sm7.filter(d=>cleanName(d.kae,false)===s));
-                    if(sAvg>0 && sAvg<avg7) lA++; if(sAvg>0 && sAvg<natAvg) lN++;
+                    if(sAvg>0 && sAvg<avg7) lA++; 
+                    if(sAvg>0 && sAvg<natAvg) lN++;
                 });
 
                 html+=`<tr>
@@ -425,18 +433,70 @@ function renderSkuTable() {
             let hTKae = hStaff.filter(s=>s.includes('KAE')).length;
             let hTDsr = hStaff.filter(s=>s.includes('DSR')).length;
             let hTHC = hTKae + hTDsr;
-            nTKae+=hTKae; nTDsr+=hTDsr; nTHC+=hTHC;
-            html+=`<tr class="sub-total-row"><td colspan="3" class="text-left">Total ${hq}</td><td>${hTKae||''}</td><td>${hTDsr||''}</td><td>${hTHC||''}</td><td colspan="9"></td></tr>`;
+            
+            let hqSm5 = hqSalesFiltered.filter(d=>isMonth(d.month,5));
+            let hqSm6 = hqSalesFiltered.filter(d=>isMonth(d.month,6));
+            let hqSm7 = hqSalesFiltered.filter(d=>isMonth(d.month,7));
+            
+            let hqAvg5 = calculateAvgSku(hqSm5);
+            let hqAvg6 = calculateAvgSku(hqSm6);
+            let hqAvg7 = calculateAvgSku(hqSm7);
+
+            let hqLowerHQ = 0;
+            let hqLowerNat = 0;
+            hStaff.forEach(s => {
+                let sAvg = calculateAvgSku(hqSm7.filter(d=>cleanName(d.kae,false)===s));
+                if(sAvg>0 && sAvg<hqAvg7) hqLowerHQ++;
+                if(sAvg>0 && sAvg<natAvg) hqLowerNat++;
+            });
+
+            html+=`<tr class="sub-total-row">
+                <td colspan="3" class="text-left">Total ${hq}</td>
+                <td>${hTKae||''}</td><td>${hTDsr||''}</td><td>${hTHC||''}</td>
+                <td>${hqAvg5?hqAvg5.toFixed(1):''}</td><td>${hqAvg6?hqAvg6.toFixed(1):''}</td><td>${hqAvg7?hqAvg7.toFixed(1):''}</td>
+                <td>${hqAvg7?hqAvg7.toFixed(1):''}</td>
+                <td>${natAvg?natAvg.toFixed(1):''}</td>
+                <td>${hqLowerHQ||''}</td><td>${hTHC?((hqLowerHQ/hTHC)*100).toFixed(0)+'%':'0%'}</td>
+                <td>${hqLowerNat||''}</td><td>${hTHC?((hqLowerNat/hTHC)*100).toFixed(0)+'%':'0%'}</td>
+            </tr>`;
         }
     });
 
-    html+=`<tr class="grand-total-row"><td colspan="3" class="text-left">Total Nationwide</td><td>${nTKae||''}</td><td>${nTDsr||''}</td><td>${nTHC||''}</td><td></td><td></td><td>${natAvg?natAvg.toFixed(1):''}</td><td></td><td>${natAvg?natAvg.toFixed(1):''}</td><td colspan="4"></td></tr>`;
+    let nStaff = [...natStaffSet];
+    let nTKae = nStaff.filter(s=>s.includes('KAE')).length;
+    let nTDsr = nStaff.filter(s=>s.includes('DSR')).length;
+    let nTHC = nTKae + nTDsr;
+
+    let natSm5 = natSalesFiltered.filter(d=>isMonth(d.month,5));
+    let natSm6 = natSalesFiltered.filter(d=>isMonth(d.month,6));
+    let natSm7 = natSalesFiltered.filter(d=>isMonth(d.month,7));
+    
+    let natAvg5Vis = calculateAvgSku(natSm5);
+    let natAvg6Vis = calculateAvgSku(natSm6);
+    let natAvg7Vis = calculateAvgSku(natSm7);
+
+    let natLowerNat = 0;
+    nStaff.forEach(s => {
+        let sAvg = calculateAvgSku(natSm7.filter(d=>cleanName(d.kae,false)===s));
+        if(sAvg>0 && sAvg<natAvg) natLowerNat++;
+    });
+
+    html+=`<tr class="grand-total-row">
+        <td colspan="3" class="text-left">Total Nationwide</td>
+        <td>${nTKae||''}</td><td>${nTDsr||''}</td><td>${nTHC||''}</td>
+        <td>${natAvg5Vis?natAvg5Vis.toFixed(1):''}</td><td>${natAvg6Vis?natAvg6Vis.toFixed(1):''}</td><td>${natAvg7Vis?natAvg7Vis.toFixed(1):''}</td>
+        <td></td>
+        <td>${natAvg?natAvg.toFixed(1):''}</td>
+        <td></td><td></td>
+        <td>${natLowerNat||''}</td><td>${nTHC?((natLowerNat/nTHC)*100).toFixed(0)+'%':'0%'}</td>
+    </tr>`;
+
     tb.innerHTML = html;
 }
 
 function exportExcel() {
-    let wb = XLSX.utils.table_to_book(document.getElementById("trackingTable"), {sheet: "Tracking SKU", raw: true});
-    XLSX.writeFile(wb, "Tracking_SKU_Invoice.xlsx");
+    let wb = XLSX.utils.table_to_book(document.getElementById("trackingTable"), {sheet: "Tracking SKU by KAM", raw: true});
+    XLSX.writeFile(wb, "Tracking_SKU_Invoice_By_KAM.xlsx");
 }
 
 // ----- TAB 0: TRACKING SKU BY AREA (CÓ TÍNH TOÁN TOTAL HQ VÀ TOTAL NATIONWIDE) -----
