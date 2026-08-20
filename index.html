@@ -1,71 +1,130 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Dashboard Tổng Hợp (SKU & Route Map)</title>
-    
+
     <!-- Thư viện Supabase, SheetJS, Leaflet & Html2Canvas -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    
+
     <style>
-        body { 
-            margin: 0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
-            background-color: #f0f4f8; padding: 15px; font-size: 13px; color: #0f172a;
+        /* ===================================================
+           THEME TOKENS — Pantone navy family (based on #00239c)
+           =================================================== */
+        :root {
+            --c-primary: #00239c;
+            --c-accent-green: #92d050;
+            --c-accent-green-dark: #1a5c37;
         }
+        html[data-theme="dark"] {
+            --bg: #050b1f;
+            --surface: #0d1533;
+            --surface-alt: #10193d;
+            --surface-alt-2: #16204d;
+            --text: #dbe4ff;
+            --text-muted: #8a95c4;
+            --border: #26315e;
+            --header-bg: #001459;
+            --header-bg-2: #00229b;
+            --tab-inactive-bg: #10193d;
+            --tab-inactive-text: #8a95c4;
+            --input-bg: #10193d;
+            --input-border: #2e3a70;
+            --table-border: #26315e;
+            --table-row-alt: #0d1533;
+            --shadow: rgba(0,0,0,0.4);
+        }
+        html[data-theme="light"] {
+            --bg: #f0f4f8;
+            --surface: #ffffff;
+            --surface-alt: #f8fafc;
+            --surface-alt-2: #eaefff;
+            --text: #0f172a;
+            --text-muted: #475569;
+            --border: #cbd5e1;
+            --header-bg: #002060;
+            --header-bg-2: #00239c;
+            --tab-inactive-bg: #e2e8f0;
+            --tab-inactive-text: #475569;
+            --input-bg: #ffffff;
+            --input-border: #94a3b8;
+            --table-border: #cbd5e1;
+            --table-row-alt: #ffffff;
+            --shadow: rgba(0,0,0,0.05);
+        }
+
+        body {
+            margin: 0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+            background-color: var(--bg); padding: 15px; font-size: 13px; color: var(--text);
+            transition: background-color 0.25s ease, color 0.25s ease;
+        }
+
+        /* ----- THEME TOGGLE ----- */
+        .theme-toggle-wrap { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+        .theme-toggle-btn {
+            display: flex; align-items: center; gap: 8px; background: var(--surface);
+            border: 1px solid var(--border); color: var(--text); padding: 8px 16px;
+            border-radius: 22px; cursor: pointer; font-weight: bold; font-size: 12px;
+            box-shadow: 0 2px 6px var(--shadow); transition: all 0.2s ease;
+        }
+        .theme-toggle-btn:hover { border-color: var(--c-primary); }
+        .theme-toggle-btn .icon { font-size: 15px; }
 
         /* ----- LÕI TABS ----- */
-        .tabs-container { margin-bottom: 20px; border-bottom: 2px solid #002060; display: flex; }
+        .tabs-container { margin-bottom: 20px; border-bottom: 2px solid var(--header-bg); display: flex; }
         .tab-btn {
-            background: #e2e8f0; border: none; padding: 12px 25px; font-size: 15px; font-weight: bold;
-            cursor: pointer; border-radius: 8px 8px 0 0; margin-right: 5px; color: #475569;
+            background: var(--tab-inactive-bg); border: none; padding: 12px 25px; font-size: 15px; font-weight: bold;
+            cursor: pointer; border-radius: 8px 8px 0 0; margin-right: 5px; color: var(--tab-inactive-text);
+            transition: all 0.2s ease;
         }
-        .tab-btn.active { background: #002060; color: white; }
-        .tab-content { display: none; background: white; padding: 20px; border: 1px solid #cbd5e1; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .tab-btn.active { background: var(--header-bg); color: white; }
+        .tab-content { display: none; background: var(--surface); padding: 20px; border: 1px solid var(--border); box-shadow: 0 4px 6px var(--shadow); }
         .tab-content.active { display: block; }
+        .tab-content h2 { color: var(--text); }
 
         /* LOADING SCREEN */
-        #loader-wrapper { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.95); z-index: 99999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s ease; text-align: center;}
-        .spinner { width: 40px; height: 40px; border: 4px solid #B5D4F4; border-top: 4px solid #0C447C; border-radius: 50%; animation: spin 1s linear infinite; }
+        #loader-wrapper { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 99999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s ease; text-align: center;}
+        .spinner { width: 40px; height: 40px; border: 4px solid var(--surface-alt-2); border-top: 4px solid var(--c-primary); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .loader-text { margin-top: 15px; font-size: 14px; font-weight: bold; color: #0C447C; }
+        .loader-text { margin-top: 15px; font-size: 14px; font-weight: bold; color: var(--c-primary); }
 
         /* ----- TAB 1: SKU DASHBOARD CSS ----- */
-        .controls-bar { display: flex; gap: 15px; margin-bottom: 15px; align-items: center; flex-wrap: wrap; background: #f8fafc; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; }
-        .filter-group { display: flex; align-items: center; gap: 8px; font-weight: bold; }
-        .filter-group select { padding: 6px; border: 1px solid #94a3b8; outline: none; border-radius: 4px; font-size: 12px; min-width: 150px; }
+        .controls-bar { display: flex; gap: 15px; margin-bottom: 15px; align-items: center; flex-wrap: wrap; background: var(--surface-alt); padding: 12px; border: 1px solid var(--border); border-radius: 6px; }
+        .filter-group { display: flex; align-items: center; gap: 8px; font-weight: bold; color: var(--text); }
+        .filter-group select { padding: 6px; border: 1px solid var(--input-border); outline: none; border-radius: 4px; font-size: 12px; min-width: 150px; background: var(--input-bg); color: var(--text); }
         .btn-excel { background-color: #217346; color: white; border: none; padding: 8px 15px; font-weight: bold; border-radius: 4px; cursor: pointer; margin-left: auto; }
         .btn-excel:hover { background-color: #1a5c37; }
-        .sku-table { width: 100%; border-collapse: collapse; min-width: 1200px; }
-        .sku-table th, .sku-table td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: center; vertical-align: middle; }
-        .sku-table thead th { background-color: #92d050; color: black; font-weight: bold; }
+        .sku-table { width: 100%; border-collapse: collapse; min-width: 1200px; color: var(--text); }
+        .sku-table th, .sku-table td { border: 1px solid var(--table-border); padding: 6px 8px; text-align: center; vertical-align: middle; }
+        .sku-table thead th { background-color: var(--c-accent-green); color: #0f172a; font-weight: bold; }
         .text-left { text-align: left !important; }
-        .sub-total-row td { background-color: #c6e0b4; font-weight: bold; }
-        .grand-total-row td { background-color: #a9d08e; font-weight: bold; }
+        .sub-total-row td { background-color: #c6e0b4; color: #0f172a; font-weight: bold; }
+        .grand-total-row td { background-color: #a9d08e; color: #0f172a; font-weight: bold; }
 
         /* ----- TAB 2: ROUTE MAP CSS ----- */
-        .btn-primary { background-color: #3b82f6; color: white; border: none; padding: 8px 15px; font-weight: bold; border-radius: 4px; cursor: pointer; }
-        .btn-primary:hover { background-color: #2563eb; }
+        .btn-primary { background-color: var(--c-primary); color: white; border: none; padding: 8px 15px; font-weight: bold; border-radius: 4px; cursor: pointer; }
+        .btn-primary:hover { background-color: var(--header-bg-2); }
         .btn-primary:disabled { background-color: #94a3b8; cursor: not-allowed; }
-        
-        /* Cấu hình khung 16:9 chuẩn PPT */
-        #ppt-wrapper { width: 100%; overflow-x: auto; background: #e2e8f0; padding: 20px 0; border-radius: 8px; }
+
+        /* Cấu hình khung 16:9 chuẩn PPT — luôn giữ nền trắng để xuất ảnh ổn định */
+        #ppt-wrapper { width: 100%; overflow-x: auto; background: var(--surface-alt); padding: 20px 0; border-radius: 8px; }
         #ppt-export-area {
             width: 1280px; height: 720px; /* Chuẩn 720p HD 16:9 */
             background-color: #ffffff; margin: 0 auto; padding: 20px;
             box-sizing: border-box; display: flex; flex-direction: column;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1); color: #0f172a;
         }
 
-        .header-bar { background-color: #002060; color: white; padding: 12px 20px; font-size: 18px; font-weight: bold; text-transform: uppercase; flex-shrink: 0; margin-bottom: 15px; }
+        .header-bar { background-color: var(--header-bg); color: white; padding: 12px 20px; font-size: 18px; font-weight: bold; text-transform: uppercase; flex-shrink: 0; margin-bottom: 15px; }
         .header-bar span.kae-name { color: #92D050; }
-        
+
         .route-main-container { flex: 1; display: flex; gap: 20px; align-items: flex-start; min-height: 0; margin-bottom: 10px; }
-        
+
         /* Bản đồ */
         #map-container { flex: 1; height: 100%; border: 1px solid #cbd5e1; background: #e2e8f0; position: relative; }
         #map { width: 100%; height: 100%; z-index: 1;}
@@ -77,9 +136,9 @@
         /* Bảng báo cáo Route */
         #report-container { flex: 1.2; display: flex; flex-direction: column; height: 100%; }
         .report-title-section { text-align: center; margin-bottom: 15px; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; flex-shrink: 0; }
-        .report-title-section h2 { margin: 0; color: #002060; font-size: 20px; text-transform: uppercase; }
+        .report-title-section h2 { margin: 0; color: var(--header-bg); font-size: 20px; text-transform: uppercase; }
         .report-title-section p { margin: 5px 0 0 0; font-size: 13px; color: #333; }
-        
+
         .route-table { width: 100%; border-collapse: collapse; font-size: 13px; flex: 1; }
         .route-table th, .route-table td { border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; vertical-align: middle; }
         .route-table thead th { background-color: #f8fafc; color: #1e293b; font-weight: bold; }
@@ -88,13 +147,15 @@
         .col-orange { color: #d97706; font-weight: bold; }
         .col-green { color: #15803d; font-weight: bold; }
         .col-navy { color: #002060; font-weight: bold; }
-        
+
         .timestamp { text-align: right; font-size: 11px; color: #64748b; font-style: italic; margin-top: 10px; flex-shrink: 0; }
-        
+
         /* Cảnh báo nằm ở đáy khung PPT */
         .warnings-section { flex-shrink: 0; padding-top: 10px; border-top: 2px dashed #cbd5e1; min-height: 60px; overflow: hidden; }
         .warning-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: #b91c1c; font-weight: bold; font-size: 13px; font-style: italic; }
         .warning-icon { width: 20px; height: 20px; flex-shrink: 0; }
+
+        #route-status { color: var(--text-muted) !important; }
     </style>
 </head>
 <body>
@@ -102,6 +163,13 @@
 <div id="loader-wrapper">
     <div class="spinner" id="loader-spinner"></div>
     <div class="loader-text" id="loader-text">ĐANG KHỞI TẠO HỆ THỐNG...</div>
+</div>
+
+<!-- CHUYỂN ĐỔI GIAO DIỆN -->
+<div class="theme-toggle-wrap">
+    <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()">
+        <span class="icon" id="themeIcon">🌙</span><span id="themeLabel">Dark Mode</span>
+    </button>
 </div>
 
 <!-- ĐIỀU HƯỚNG TABS -->
@@ -115,7 +183,7 @@
 <!-- TAB 0: TRACKING SKU & INVOICE BY AREA      -->
 <!-- ========================================== -->
 <div id="tab-area" class="tab-content active">
-    <h2 style="margin-top:0;">TRACKING SKU/ INVOICE BY AREA - JULY 2026</h2>
+    <h2 style="margin-top:0;" id="areaTitle">TRACKING SKU/ INVOICE BY AREA</h2>
     <div class="controls-bar">
         <div class="filter-group"><label>Vùng (HQ):</label><select id="filterAreaHQ" onchange="renderAreaSkuTable()"><option value="ALL">Tất cả</option></select></div>
         <div class="filter-group"><label>Khu vực (Area):</label><select id="filterAreaOnly" onchange="renderAreaSkuTable()"><option value="ALL">Tất cả</option></select></div>
@@ -131,11 +199,11 @@
                     <th colspan="3">SKU/ invoice</th>
                     <th rowspan="2" style="width: 8%;">SKU/invc<br>vùng (HQ)</th>
                     <th rowspan="2" style="width: 8%;">SKU/invc<br>toàn quốc</th>
-                    <th colspan="4">No. of HC in July'26</th>
+                    <th colspan="4" id="areaThHcTitle">No. of HC</th>
                 </tr>
                 <tr>
                     <th style="width: 6%;">KAE</th><th style="width: 6%;">DSR</th><th style="width: 6%;">Total</th>
-                    <th style="width: 7%;">May</th><th style="width: 7%;">June</th><th style="width: 7%;">July</th>
+                    <th style="width: 7%;" id="areaThM1">M1</th><th style="width: 7%;" id="areaThM2">M2</th><th style="width: 7%;" id="areaThM3">M3</th>
                     <th style="width: 12%;">Lower than HQ SKU/ invoice</th><th style="width: 7%;">% of Staff</th>
                     <th style="width: 12%;">Lower than nationwide SKU/ invoice</th><th style="width: 7%;">% of Staff</th>
                 </tr>
@@ -149,7 +217,7 @@
 <!-- TAB 1: TRACKING SKU & INVOICE              -->
 <!-- ========================================== -->
 <div id="tab-sku" class="tab-content">
-    <h2 style="margin-top:0;">TRACKING SKU/ INVOICE IN JULY 2026</h2>
+    <h2 style="margin-top:0;" id="skuTitle">TRACKING SKU/ INVOICE</h2>
     <div class="controls-bar">
         <div class="filter-group"><label>Vùng (HQ):</label><select id="filterHQ" onchange="renderSkuTable()"><option value="ALL">Tất cả</option></select></div>
         <div class="filter-group"><label>PIC:</label><select id="filterPIC" onchange="renderSkuTable()"><option value="ALL">Tất cả</option></select></div>
@@ -167,11 +235,11 @@
                     <th colspan="3">SKU/ invoice</th>
                     <th rowspan="2" style="width: 6%;">SKU/invc<br>khu vực</th>
                     <th rowspan="2" style="width: 6%;">SKU/invc<br>toàn quốc</th>
-                    <th colspan="4">No. of HC in July'26</th>
+                    <th colspan="4" id="skuThHcTitle">No. of HC</th>
                 </tr>
                 <tr>
                     <th style="width: 4%;">KAE</th><th style="width: 4%;">DSR</th><th style="width: 4%;">Total</th>
-                    <th style="width: 5%;">May</th><th style="width: 5%;">June</th><th style="width: 5%;">July</th>
+                    <th style="width: 5%;" id="skuThM1">M1</th><th style="width: 5%;" id="skuThM2">M2</th><th style="width: 5%;" id="skuThM3">M3</th>
                     <th style="width: 12%;">Lower than area/HQ SKU</th><th style="width: 5%;">% of Staff</th>
                     <th style="width: 12%;">Lower than nationwide SKU</th><th style="width: 5%;">% of Staff</th>
                 </tr>
@@ -187,12 +255,12 @@
 <div id="tab-route" class="tab-content">
     <div class="controls-bar">
         <button id="btnLoadRouteData" class="btn-primary" onclick="loadRouteData()">📥 Tải Dữ Liệu Excel Map</button>
-        <span id="route-status" style="font-size: 13px; font-style: italic; color: #64748b; margin-right: 15px;">(Chưa tải dữ liệu)</span>
-        
+        <span id="route-status" style="font-size: 13px; font-style: italic; margin-right: 15px;">(Chưa tải dữ liệu)</span>
+
         <div class="filter-group"><label>Khu vực:</label><select id="rtArea" disabled onchange="updateRtNPP()"><option value="">-- Chọn --</option></select></div>
         <div class="filter-group"><label>NPP:</label><select id="rtNPP" disabled onchange="updateRtNV()"><option value="">-- Chọn --</option></select></div>
         <div class="filter-group"><label>Nhân viên:</label><select id="rtNV" disabled onchange="renderRouteDashboard()"><option value="">-- Chọn --</option></select></div>
-        
+
         <button id="btn-download-ppt" class="btn-primary" style="background-color: #8b5cf6; margin-left: auto;" onclick="downloadReportPPT()" disabled>📸 Tải Ảnh PPT</button>
     </div>
 
@@ -223,7 +291,7 @@
                             <tbody id="route-table-body"></tbody>
                             <tfoot id="route-table-foot"></tfoot>
                         </table>
-                        
+
                         <div class="timestamp">Thời gian dữ liệu: <span id="ui-timestamp"></span></div>
                     </div>
                 </div>
@@ -235,6 +303,20 @@
 </div>
 
 <script>
+// ==========================================
+// GIAO DIỆN: DARK / LIGHT MODE (mặc định Dark)
+// ==========================================
+let currentTheme = 'dark';
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    const icon = document.getElementById('themeIcon');
+    const label = document.getElementById('themeLabel');
+    if (theme === 'dark') { icon.textContent = '🌙'; label.textContent = 'Dark Mode'; }
+    else { icon.textContent = '☀️'; label.textContent = 'Light Mode'; }
+    currentTheme = theme;
+}
+function toggleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
+
 // ==========================================
 // CẤU HÌNH SUPABASE & APPS SCRIPT
 // ==========================================
@@ -256,7 +338,7 @@ function switchTab(tabId, btnElement) {
     document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
     document.getElementById(tabId).classList.add('active');
     btnElement.classList.add('active');
-    
+
     if (tabId === 'tab-route') {
         setTimeout(() => { map.invalidateSize(); }, 200);
     }
@@ -267,15 +349,35 @@ function switchTab(tabId, btnElement) {
 // =====================================================================
 let dbMaster = []; let dbSales = [];
 
+// ----- Tự động xác định các tháng dữ liệu gần nhất -----
+// Thử tải N tháng gần nhất tính đến hôm nay (kể cả tháng hiện tại).
+// Tháng nào không có file (dataMx.js không tồn tại) sẽ tự động bị bỏ qua,
+// không cần chỉnh sửa code mỗi khi có tháng dữ liệu mới.
+const MONTHS_BACK_TO_TRY = 6;
+function getRecentMonthsConfig(monthsBack) {
+    const now = new Date();
+    const cfgs = [];
+    for (let i = monthsBack - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const n = d.getMonth() + 1; // 1-12
+        const label = d.toLocaleString('en-US', { month: 'long' });
+        cfgs.push({ n: n, year: d.getFullYear(), label: label, file: 'dataM' + n + '.js', loaded: false });
+    }
+    return cfgs;
+}
+const MONTH_CONFIGS = getRecentMonthsConfig(MONTHS_BACK_TO_TRY);
+let TREND_CFGS = [null, null, null];
+let TREND_M1 = null, TREND_M2 = null, CURRENT_MONTH = null;
+
 (async function loadSkuData() {
     try {
         const { data: { session } } = await mySupabaseApp.auth.getSession();
-        if (!session) { 
+        if (!session) {
             document.getElementById('loader-text').innerHTML = '⚠️ Phiên đăng nhập hết hạn. Không thể tải dữ liệu.';
-            return; 
+            return;
         }
 
-        let secureFiles = ['dataM5.js', 'dataM6.js', 'dataM7.js'];
+        let secureFiles = MONTH_CONFIGS.map(c => c.file);
         const { data: urls, error } = await mySupabaseApp.storage.from('data').createSignedUrls(secureFiles, 60);
         if (error || !urls) throw error;
 
@@ -289,11 +391,11 @@ let dbMaster = []; let dbSales = [];
         validUrls.forEach(srcUrl => {
             let script = document.createElement('script');
             script.src = srcUrl; script.async = true;
-            script.onload = done; script.onerror = () => { console.warn("Lỗi tải:", srcUrl); done(); };
+            script.onload = done; script.onerror = () => { console.warn("Lỗi tải (bỏ qua):", srcUrl); done(); };
             document.body.appendChild(script);
         });
     } catch (err) {
-        console.error("Lỗi Tab 1:", err); 
+        console.error("Lỗi Tab 1:", err);
         document.getElementById('loader-text').innerHTML = '⚠️ Lỗi tải dữ liệu SKU';
     }
 })();
@@ -308,12 +410,25 @@ function cleanName(name, isKamField = false, areaName = "") {
 }
 
 function initSkuLogic() {
-    if (typeof dbMasterM5 !== 'undefined') dbMaster = dbMaster.concat(dbMasterM5);
-    if (typeof dbSalesM5 !== 'undefined')  dbSales  = dbSales.concat(dbSalesM5);
-    if (typeof dbMasterM6 !== 'undefined') dbMaster = dbMaster.concat(dbMasterM6);
-    if (typeof dbSalesM6 !== 'undefined')  dbSales  = dbSales.concat(dbSalesM6);
-    if (typeof dbMasterM7 !== 'undefined') dbMaster = dbMaster.concat(dbMasterM7);
-    if (typeof dbSalesM7 !== 'undefined')  dbSales  = dbSales.concat(dbSalesM7);
+    // Gộp dữ liệu của tất cả các tháng thực sự tải được (bỏ qua tháng không có file)
+    MONTH_CONFIGS.forEach(cfg => {
+        let mArr = window['dbMasterM' + cfg.n];
+        let sArr = window['dbSalesM' + cfg.n];
+        let got = false;
+        if (Array.isArray(mArr) && mArr.length) { dbMaster = dbMaster.concat(mArr); got = true; }
+        if (Array.isArray(sArr) && sArr.length) { dbSales = dbSales.concat(sArr); got = true; }
+        cfg.loaded = got;
+    });
+
+    // Xác định 3 tháng gần nhất có dữ liệu để hiển thị xu hướng (trend) + tháng hiện tại dùng để tính toán chính
+    let loadedCfgs = MONTH_CONFIGS.filter(c => c.loaded);
+    TREND_CFGS = loadedCfgs.slice(-3);
+    while (TREND_CFGS.length < 3) TREND_CFGS.unshift(null);
+    TREND_M1 = TREND_CFGS[0] ? TREND_CFGS[0].n : null;
+    TREND_M2 = TREND_CFGS[1] ? TREND_CFGS[1].n : null;
+    CURRENT_MONTH = TREND_CFGS[2] ? TREND_CFGS[2].n : (loadedCfgs.length ? loadedCfgs[loadedCfgs.length - 1].n : (new Date().getMonth() + 1));
+
+    updateDynamicLabels();
 
     const isValidStaff = (d) => {
         let rawName = String(d.kae || "").trim().toUpperCase();
@@ -332,7 +447,7 @@ function initSkuLogic() {
     };
     pop('filterHQ', hqs); pop('filterPIC', pics); pop('filterArea', areas);
     pop('filterAreaHQ', hqs); pop('filterAreaOnly', areas);
-    
+
     renderSkuTable();
     renderAreaSkuTable();
 
@@ -343,10 +458,27 @@ function initSkuLogic() {
     }, 500);
 }
 
+// Cập nhật tiêu đề & tên cột tháng theo dữ liệu thực tế đã tải được
+function updateDynamicLabels() {
+    const lab = c => c ? c.label : '--';
+    const t3 = TREND_CFGS[2];
+
+    ['skuThM1', 'areaThM1'].forEach(id => { let el = document.getElementById(id); if (el) el.textContent = lab(TREND_CFGS[0]); });
+    ['skuThM2', 'areaThM2'].forEach(id => { let el = document.getElementById(id); if (el) el.textContent = lab(TREND_CFGS[1]); });
+    ['skuThM3', 'areaThM3'].forEach(id => { let el = document.getElementById(id); if (el) el.textContent = lab(t3); });
+
+    const curLabel = t3 ? (t3.label + " '" + String(t3.year).slice(-2)) : '';
+    ['skuThHcTitle', 'areaThHcTitle'].forEach(id => { let el = document.getElementById(id); if (el) el.textContent = 'No. of HC in ' + curLabel; });
+
+    const titleText = t3 ? (t3.label.toUpperCase() + ' ' + t3.year) : '';
+    let st = document.getElementById('skuTitle'); if (st) st.textContent = 'TRACKING SKU/ INVOICE IN ' + titleText;
+    let at = document.getElementById('areaTitle'); if (at) at.textContent = 'TRACKING SKU/ INVOICE BY AREA - ' + titleText;
+}
+
 function calculateAvgSku(subset) {
     let invMap = {}; let sales = 0;
     subset.forEach(d => {
-        let cS = Number(d.sales) || 0; sales += cS; 
+        let cS = Number(d.sales) || 0; sales += cS;
         if (cS > 0) {
             let key = `${d.cusCode}_${d.day || ''}_${d.week || d.wiso || ''}_${d.month || ''}`;
             if (!invMap[key]) invMap[key] = 0;
@@ -358,11 +490,15 @@ function calculateAvgSku(subset) {
     return c > 0 ? (s / c) : 0;
 }
 
+// Nhận diện tháng linh hoạt cho MỌI tháng (1-12), không giới hạn 5/6/7 như trước
 function isMonth(val, m) {
-    let str = String(val).toLowerCase();
-    if(m===5) return str.includes('5')||str.includes('may');
-    if(m===6) return str.includes('6')||str.includes('jun');
-    if(m===7) return str.includes('7')||str.includes('jul'); return false;
+    if (m === null || m === undefined) return false;
+    let str = String(val).toLowerCase().trim();
+    if (str === String(m)) return true;
+    const monthAbbr = ['', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    if (monthAbbr[m] && str.includes(monthAbbr[m])) return true;
+    if (new RegExp('(^|[^0-9])' + m + '([^0-9]|$)').test(str)) return true;
+    return false;
 }
 
 // ----- TAB 1: TRACKING SKU BY KAM -----
@@ -373,10 +509,10 @@ function renderSkuTable() {
     let all = [...dbMaster, ...dbSales];
     let html = ''; let tb = document.getElementById('skuTrackingBody');
 
-    let natSJul = dbSales.filter(d => isMonth(d.month, 7));
+    let natSJul = dbSales.filter(d => isMonth(d.month, CURRENT_MONTH));
     let natAvg = calculateAvgSku(natSJul);
     let hqs = (selHQ !== "ALL") ? [selHQ] : [...new Set(all.map(d=>d.hq))].filter(Boolean).sort();
-    
+
     let natStaffSet = new Set();
     let natSalesFiltered = [];
     let nTHQLower = 0; // Biến cộng dồn lỗi Lower Than HQ cho dòng Toàn quốc
@@ -385,9 +521,9 @@ function renderSkuTable() {
         let hd = all.filter(d=>d.hq===hq);
         let kams = [...new Set(hd.map(d=>cleanName(d.kam, true, d.area)))].filter(Boolean).sort();
         if(selPIC !== "ALL") kams = kams.filter(k=>k===selPIC);
-        
+
         let hasHq=false;
-        let hqStaffSet = new Set(); 
+        let hqStaffSet = new Set();
         let hqSalesFiltered = [];
 
         kams.forEach(kam => {
@@ -403,19 +539,19 @@ function renderSkuTable() {
                 hqSalesFiltered.push(...as);
                 natSalesFiltered.push(...as);
 
-                let sm5 = as.filter(d=>isMonth(d.month,5)); let sm6 = as.filter(d=>isMonth(d.month,6)); let sm7 = as.filter(d=>isMonth(d.month,7));
-                let am7 = am.filter(d=>isMonth(d.month,7));
-                
+                let sm5 = as.filter(d=>isMonth(d.month,TREND_M1)); let sm6 = as.filter(d=>isMonth(d.month,TREND_M2)); let sm7 = as.filter(d=>isMonth(d.month,CURRENT_MONTH));
+                let am7 = am.filter(d=>isMonth(d.month,CURRENT_MONTH));
+
                 let stf = [...new Set([...am7.map(d=>d.kae), ...sm7.map(d=>d.kae)].map(n=>cleanName(n,false)))].filter(Boolean);
                 let kC = stf.filter(s=>s.includes('KAE')).length; let dC = stf.filter(s=>s.includes('DSR')).length; let tC = kC+dC;
-                
+
                 stf.forEach(s => { hqStaffSet.add(s); natStaffSet.add(s); });
 
                 let avg5 = calculateAvgSku(sm5); let avg6 = calculateAvgSku(sm6); let avg7 = calculateAvgSku(sm7);
                 let lA=0, lN=0;
                 stf.forEach(s => {
                     let sAvg = calculateAvgSku(sm7.filter(d=>cleanName(d.kae,false)===s));
-                    if(sAvg>0 && sAvg<avg7) lA++; 
+                    if(sAvg>0 && sAvg<avg7) lA++;
                     if(sAvg>0 && sAvg<natAvg) lN++;
                 });
 
@@ -429,17 +565,17 @@ function renderSkuTable() {
                 </tr>`;
             });
         });
-        
+
         if(hasHq) {
             let hStaff = [...hqStaffSet];
             let hTKae = hStaff.filter(s=>s.includes('KAE')).length;
             let hTDsr = hStaff.filter(s=>s.includes('DSR')).length;
             let hTHC = hTKae + hTDsr;
-            
-            let hqSm5 = hqSalesFiltered.filter(d=>isMonth(d.month,5));
-            let hqSm6 = hqSalesFiltered.filter(d=>isMonth(d.month,6));
-            let hqSm7 = hqSalesFiltered.filter(d=>isMonth(d.month,7));
-            
+
+            let hqSm5 = hqSalesFiltered.filter(d=>isMonth(d.month,TREND_M1));
+            let hqSm6 = hqSalesFiltered.filter(d=>isMonth(d.month,TREND_M2));
+            let hqSm7 = hqSalesFiltered.filter(d=>isMonth(d.month,CURRENT_MONTH));
+
             let hqAvg5 = calculateAvgSku(hqSm5);
             let hqAvg6 = calculateAvgSku(hqSm6);
             let hqAvg7 = calculateAvgSku(hqSm7);
@@ -471,10 +607,10 @@ function renderSkuTable() {
     let nTDsr = nStaff.filter(s=>s.includes('DSR')).length;
     let nTHC = nTKae + nTDsr;
 
-    let natSm5 = natSalesFiltered.filter(d=>isMonth(d.month,5));
-    let natSm6 = natSalesFiltered.filter(d=>isMonth(d.month,6));
-    let natSm7 = natSalesFiltered.filter(d=>isMonth(d.month,7));
-    
+    let natSm5 = natSalesFiltered.filter(d=>isMonth(d.month,TREND_M1));
+    let natSm6 = natSalesFiltered.filter(d=>isMonth(d.month,TREND_M2));
+    let natSm7 = natSalesFiltered.filter(d=>isMonth(d.month,CURRENT_MONTH));
+
     let natAvg5Vis = calculateAvgSku(natSm5);
     let natAvg6Vis = calculateAvgSku(natSm6);
     let natAvg7Vis = calculateAvgSku(natSm7);
@@ -510,9 +646,9 @@ function renderAreaSkuTable() {
     let all = [...dbMaster, ...dbSales];
     let html = ''; let tb = document.getElementById('areaSkuTrackingBody');
 
-    let natSJul = dbSales.filter(d => isMonth(d.month, 7));
-    let natAvg = calculateAvgSku(natSJul); 
-    
+    let natSJul = dbSales.filter(d => isMonth(d.month, CURRENT_MONTH));
+    let natAvg = calculateAvgSku(natSJul);
+
     let hqs = (selHQ !== "ALL") ? [selHQ] : [...new Set(all.map(d=>d.hq))].filter(Boolean).sort();
 
     let natStaffSet = new Set();
@@ -528,7 +664,7 @@ function renderAreaSkuTable() {
         let hqStaffSet = new Set();
         let hqSalesFiltered = [];
 
-        let hqSalesJul = dbSales.filter(d=>d.hq===hq && isMonth(d.month, 7));
+        let hqSalesJul = dbSales.filter(d=>d.hq===hq && isMonth(d.month, CURRENT_MONTH));
         let hqAvg = calculateAvgSku(hqSalesJul);
 
         ars.forEach(ar => {
@@ -539,12 +675,12 @@ function renderAreaSkuTable() {
             hqSalesFiltered.push(...as);
             natSalesFiltered.push(...as);
 
-            let sm5 = as.filter(d=>isMonth(d.month,5)); let sm6 = as.filter(d=>isMonth(d.month,6)); let sm7 = as.filter(d=>isMonth(d.month,7));
-            let am7 = am.filter(d=>isMonth(d.month,7));
+            let sm5 = as.filter(d=>isMonth(d.month,TREND_M1)); let sm6 = as.filter(d=>isMonth(d.month,TREND_M2)); let sm7 = as.filter(d=>isMonth(d.month,CURRENT_MONTH));
+            let am7 = am.filter(d=>isMonth(d.month,CURRENT_MONTH));
 
             let stf = [...new Set([...am7.map(d=>d.kae), ...sm7.map(d=>d.kae)].map(n=>cleanName(n,false)))].filter(Boolean);
             let kC = stf.filter(s=>s.includes('KAE')).length; let dC = stf.filter(s=>s.includes('DSR')).length; let tC = kC+dC;
-            
+
             stf.forEach(s => { hqStaffSet.add(s); natStaffSet.add(s); });
 
             let avg5 = calculateAvgSku(sm5); let avg6 = calculateAvgSku(sm6); let avg7 = calculateAvgSku(sm7);
@@ -565,17 +701,17 @@ function renderAreaSkuTable() {
                 <td>${lN||''}</td><td>${tC?((lN/tC)*100).toFixed(0)+'%':'0%'}</td>
             </tr>`;
         });
-        
+
         if(hasHq) {
             let hStaff = [...hqStaffSet];
             let hTKae = hStaff.filter(s=>s.includes('KAE')).length;
             let hTDsr = hStaff.filter(s=>s.includes('DSR')).length;
             let hTHC = hTKae + hTDsr;
 
-            let hqSm5 = hqSalesFiltered.filter(d=>isMonth(d.month,5));
-            let hqSm6 = hqSalesFiltered.filter(d=>isMonth(d.month,6));
-            let hqSm7 = hqSalesFiltered.filter(d=>isMonth(d.month,7));
-            
+            let hqSm5 = hqSalesFiltered.filter(d=>isMonth(d.month,TREND_M1));
+            let hqSm6 = hqSalesFiltered.filter(d=>isMonth(d.month,TREND_M2));
+            let hqSm7 = hqSalesFiltered.filter(d=>isMonth(d.month,CURRENT_MONTH));
+
             let hqAvg5 = calculateAvgSku(hqSm5);
             let hqAvg6 = calculateAvgSku(hqSm6);
             let hqAvg7 = calculateAvgSku(hqSm7);
@@ -607,10 +743,10 @@ function renderAreaSkuTable() {
     let nTDsr = nStaff.filter(s=>s.includes('DSR')).length;
     let nTHC = nTKae + nTDsr;
 
-    let natSm5 = natSalesFiltered.filter(d=>isMonth(d.month,5));
-    let natSm6 = natSalesFiltered.filter(d=>isMonth(d.month,6));
-    let natSm7 = natSalesFiltered.filter(d=>isMonth(d.month,7));
-    
+    let natSm5 = natSalesFiltered.filter(d=>isMonth(d.month,TREND_M1));
+    let natSm6 = natSalesFiltered.filter(d=>isMonth(d.month,TREND_M2));
+    let natSm7 = natSalesFiltered.filter(d=>isMonth(d.month,CURRENT_MONTH));
+
     let natAvg5Vis = calculateAvgSku(natSm5);
     let natAvg6Vis = calculateAvgSku(natSm6);
     let natAvg7Vis = calculateAvgSku(natSm7);
@@ -644,10 +780,10 @@ function exportAreaExcel() {
 // PHẦN 2: LOGIC TAB 2 (ROUTE MAP BÁO CÁO TUẦN)
 // =====================================================================
 
-let rawRouteData = []; let rawOrderData = []; 
+let rawRouteData = []; let rawOrderData = [];
 let colOrderPO = -1, colOrderSales = -1;
 let globalDateRange = "";
-let globalWarningsData = null; 
+let globalWarningsData = null;
 
 const COL = { NPP: 2, NV: 6, THU: 11, STT_GHE: 12, LO_TRINH: 13, MA_KH: 14, TEN_KH: 15, TIME_IN: 19, TIME_OUT: 20, TIME_TOTAL: 21, DS_DON_HANG: 22, LAT: 30, LNG: 31, AREA: 37 };
 const DAYS_ORDER = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
@@ -666,9 +802,9 @@ async function loadRouteData() {
         let urlDH = signedUrls.find(u => u.path === 'dh.xlsx').signedUrl;
 
         let [rMap, rDH, rWarn] = await Promise.all([
-            fetch(urlMap), 
+            fetch(urlMap),
             fetch(urlDH),
-            fetch(GAS_WEB_APP_URL).catch(e => null) 
+            fetch(GAS_WEB_APP_URL).catch(e => null)
         ]);
 
         let [bMap, bDH] = await Promise.all([rMap.arrayBuffer(), rDH.arrayBuffer()]);
@@ -680,8 +816,8 @@ async function loadRouteData() {
 
         let wbDH = XLSX.read(bDH, {type: 'array'});
         rawOrderData = XLSX.utils.sheet_to_json(wbDH.Sheets[wbDH.SheetNames[0]], {header: 1});
-        
-        colOrderPO = 16; colOrderSales = 33; 
+
+        colOrderPO = 16; colOrderSales = 33;
         for (let i = 0; i < Math.min(100, rawOrderData.length); i++) {
             if(!rawOrderData[i]) continue;
             for (let j = 0; j < rawOrderData[i].length; j++) {
@@ -695,7 +831,7 @@ async function loadRouteData() {
             try {
                 let warnData = await rWarn.json();
                 if (warnData.status === "success") {
-                    globalWarningsData = warnData.data; 
+                    globalWarningsData = warnData.data;
                 }
             } catch(e) { console.error("Lỗi phân tích JSON cảnh báo:", e); }
         }
@@ -717,7 +853,7 @@ function updateRtNPP() {
     let area = document.getElementById('rtArea').value;
     let selN = document.getElementById('rtNPP'); selN.innerHTML = '<option value="">-- Chọn NPP --</option>';
     if(!area) { selN.disabled = true; document.getElementById('rtNV').disabled = true; return; }
-    
+
     let npps = [...new Set(rawRouteData.filter(r => r[COL.AREA]===area).map(r => r[COL.NPP]))].filter(Boolean);
     npps.forEach(n => selN.add(new Option(n, n)));
     selN.disabled = false; document.getElementById('rtNV').disabled = true;
@@ -729,7 +865,7 @@ function updateRtNV() {
     let area = document.getElementById('rtArea').value; let npp = document.getElementById('rtNPP').value;
     let selV = document.getElementById('rtNV'); selV.innerHTML = '<option value="">-- Chọn Nhân viên --</option>';
     if(!npp) { selV.disabled = true; return; }
-    
+
     let nvs = [...new Set(rawRouteData.filter(r => r[COL.AREA]===area && r[COL.NPP]===npp).map(r => r[COL.NV]))].filter(Boolean);
     nvs.forEach(nv => selV.add(new Option(nv, nv)));
     selV.disabled = false;
@@ -738,17 +874,17 @@ function updateRtNV() {
 }
 
 function renderRouteDashboard() {
-    let area = document.getElementById('rtArea').value; 
-    let npp = document.getElementById('rtNPP').value; 
+    let area = document.getElementById('rtArea').value;
+    let npp = document.getElementById('rtNPP').value;
     let nv = document.getElementById('rtNV').value;
-    if(!nv) { 
-        document.getElementById('route-dashboard-wrapper').style.display = 'none'; 
+    if(!nv) {
+        document.getElementById('route-dashboard-wrapper').style.display = 'none';
         document.getElementById('btn-download-ppt').disabled = true;
-        return; 
+        return;
     }
 
     document.getElementById('route-dashboard-wrapper').style.display = 'block';
-    document.getElementById('btn-download-ppt').disabled = false; 
+    document.getElementById('btn-download-ppt').disabled = false;
 
     setTimeout(() => { map.invalidateSize(); }, 100);
 
@@ -756,13 +892,13 @@ function renderRouteDashboard() {
     document.getElementById('ui-staff').innerText = nv;
     document.getElementById('ui-area').innerText = area;
     document.getElementById('ui-npp').innerText = npp;
-    
+
     let reportDate = globalDateRange || "Thời gian không xác định";
     document.getElementById('ui-date-range').innerText = reportDate;
     document.getElementById('ui-timestamp').innerText = reportDate;
 
     let empData = rawRouteData.filter(r => r[COL.AREA]===area && r[COL.NPP]===npp && r[COL.NV]===nv);
-    
+
     const tbody = document.getElementById('route-table-body'); tbody.innerHTML = "";
     const tfoot = document.getElementById('route-table-foot');
     routeLayer.clearLayers(); let allLatLngs = [];
@@ -801,7 +937,7 @@ function renderRouteDashboard() {
                 });
             }
 
-            let lat = parseFloat(row[COL.LAT]); let lng = parseFloat(row[COL.LNG]); 
+            let lat = parseFloat(row[COL.LAT]); let lng = parseFloat(row[COL.LNG]);
             if (!isNaN(lat) && !isNaN(lng)) {
                 let ll = [lat, lng]; dayLatLngs.push(ll); allLatLngs.push(ll);
                 let icon = L.divIcon({
@@ -817,7 +953,7 @@ function renderRouteDashboard() {
 
         if (dayLatLngs.length > 1) L.polyline(dayLatLngs, {color: color, weight: 3, opacity: 0.7, dashArray: '5,5'}).addTo(routeLayer);
 
-        totalVisit += dData.length; totalOrder += dayOrders; 
+        totalVisit += dData.length; totalOrder += dayOrders;
         totalSales += daySales; totalDist += dayDist;
 
         let tr = `<tr>
@@ -848,7 +984,7 @@ function displayWarnings(rawName) {
     const wc = document.getElementById('warnings-list');
     let clean = String(rawName).replace(/^(KAE|DSR)\s+/i, '').trim().toUpperCase();
 
-    wc.innerHTML = ''; 
+    wc.innerHTML = '';
 
     if (!globalWarningsData) {
         wc.innerHTML = '<span style="color:#d97706; font-size: 13px;">(Không thể tải dữ liệu cảnh báo từ hệ thống)</span>';
@@ -856,7 +992,7 @@ function displayWarnings(rawName) {
     }
 
     let comments = globalWarningsData[clean] || [];
-    
+
     if (comments.length > 0) {
         comments.forEach(cmt => {
             wc.insertAdjacentHTML('beforeend', `<div class="warning-item">
@@ -879,12 +1015,12 @@ async function downloadReportPPT() {
 
     try {
         const element = document.getElementById('ppt-export-area');
-        const canvas = await html2canvas(element, { 
-            scale: 2,           
-            useCORS: true,      
+        const canvas = await html2canvas(element, {
+            scale: 2,
+            useCORS: true,
             allowTaint: false
         });
-        
+
         const link = document.createElement('a');
         const nv = document.getElementById('ui-staff').innerText || "BaoCao";
         link.download = `RouteMap_PPT_${nv.replace(/\s+/g, '_')}.png`;
